@@ -1,0 +1,188 @@
+// Prisma schema for TaskFlow — multi-tenant project management SaaS
+//
+// Tenancy model: "shared database, shared schema" — every tenant-scoped
+// table carries an organizationId column. Isolation is enforced in the
+// application layer via a request-scoped Prisma wrapper (see
+// src/common/prisma/tenant-scoped.service.ts) rather than separate
+// databases/schemas per tenant. This is the right tradeoff for this
+// project's scale and is far simpler to reason about, test, and deploy.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+// A User can belong to multiple Organizations (multi-tenant membership),
+// each membership carrying its own Role.
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  memberships  Membership[]
+  refreshTokens RefreshToken[]
+  comments     Comment[]
+  assignedTasks Task[]        @relation("TaskAssignee")
+  activities   Activity[]
+
+  @@map("users")
+}
+
+// The tenant. Every piece of business data hangs off an Organization.
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships Membership[]
+  projects    Project[]
+
+  @@map("organizations")
+}
+
+// Join table: User <-> Organization, with a role scoped to that org.
+// A user can be OWNER of one org and MEMBER of another.
+model Membership {
+  id             String   @id @default(cuid())
+  role           Role     @default(MEMBER)
+  createdAt      DateTime @default(now())
+
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+model Project {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  columns        BoardColumn[]
+  tasks          Task[]
+
+  @@index([organizationId])
+  @@map("projects")
+}
+
+// Kanban-style columns, ordered via `position` for drag-and-drop reordering.
+model BoardColumn {
+  id        String   @id @default(cuid())
+  name      String
+  position  Int
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  tasks     Task[]
+
+  @@index([projectId])
+  @@map("board_columns")
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  position    Int
+  dueDate     DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  projectId   String
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  columnId    String
+  column      BoardColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+
+  assigneeId  String?
+  assignee    User? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  comments    Comment[]
+  activities  Activity[]
+
+  @@index([projectId])
+  @@index([columnId])
+  @@map("tasks")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  taskId    String
+  task      Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  authorId  String
+  author    User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("comments")
+}
+
+// Audit trail for activity feeds (e.g. "Sarah moved this to In Progress").
+model Activity {
+  id        String   @id @default(cuid())
+  type      String   // e.g. "TASK_CREATED", "TASK_MOVED", "COMMENT_ADDED"
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  taskId    String
+  task      Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("activities")
+}
+
+// Refresh tokens stored hashed, rotated on each use (see auth.service.ts).
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}

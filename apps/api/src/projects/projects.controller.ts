@@ -1,0 +1,64 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { TenantGuard } from '../common/guards/tenant.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
+import { ProjectsService } from './projects.service';
+import { CreateProjectDto, UpdateProjectDto } from './dto/project.dto';
+import { AuthenticatedRequest } from '../common/types/auth.types';
+
+@Controller('projects')
+@UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+export class ProjectsController {
+  constructor(private readonly projectsService: ProjectsService) {}
+
+  @Get()
+  findAll(@CurrentTenant() tenant: AuthenticatedRequest['tenant']) {
+    return this.projectsService.findAll(tenant.organizationId);
+  }
+
+  @Get(':id')
+  findOne(
+    @CurrentTenant() tenant: AuthenticatedRequest['tenant'],
+    @Param('id') id: string,
+  ) {
+    return this.projectsService.findOne(tenant.organizationId, id);
+  }
+
+  @Post()
+  create(
+    @CurrentTenant() tenant: AuthenticatedRequest['tenant'],
+    @Body() dto: CreateProjectDto,
+  ) {
+    return this.projectsService.create(tenant.organizationId, dto);
+  }
+
+  @Patch(':id')
+  @Roles('OWNER', 'ADMIN')
+  update(
+    @CurrentTenant() tenant: AuthenticatedRequest['tenant'],
+    @Param('id') id: string,
+    @Body() dto: UpdateProjectDto,
+  ) {
+    return this.projectsService.update(tenant.organizationId, id, dto);
+  }
+
+  @Delete(':id')
+  @Roles('OWNER', 'ADMIN')
+  remove(
+    @CurrentTenant() tenant: AuthenticatedRequest['tenant'],
+    @Param('id') id: string,
+  ) {
+    return this.projectsService.remove(tenant.organizationId, id);
+  }
+}
