@@ -35,6 +35,9 @@ layered security in a monorepo setup.
 - **Multi-tenant auth** — JWT access tokens (15 min) with rotating refresh tokens (30 days, hashed
   at rest). Presenting a refresh token immediately invalidates it and issues a fresh one; replaying a
   revoked token is treated as a theft signal.
+- **Rich task detail** — each task has an editable description and an assignee picker that lists
+  all org members with avatar preview. Changes to description, assignee, priority, due date, and
+  labels are all saved in a single action from the task detail modal.
 - **Task priority** — each task carries a priority level (`Low` / `Medium` / `High` / `Urgent`).
   Color-coded badges appear on cards (grey → sky → amber → coral); Medium is hidden to keep the
   board uncluttered. Priority is editable inline from the task detail modal.
