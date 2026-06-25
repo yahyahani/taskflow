@@ -13,7 +13,8 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { fetchProject } from '@/lib/projects-api';
+import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { fetchProject, reorderColumn } from '@/lib/projects-api';
 import { createTask, deleteTask, fetchTasks, moveTask, searchTasks, updateTask } from '@/lib/tasks-api';
 import { useAuthStore } from '@/store/auth.store';
 import { useThemeStore } from '@/store/theme.store';
@@ -23,7 +24,7 @@ import { TaskCard } from '@/components/TaskCard';
 import { TaskDetailModal } from '@/components/TaskDetailModal';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { MeshBackground } from '@/components/MeshBackground';
-import type { Task, TaskStatus } from '@/types';
+import type { BoardColumn as BoardColumnType, Project, Task, TaskStatus } from '@/types';
 
 const STATUS_BY_COLUMN_NAME: Record<string, TaskStatus> = {
   'To Do': 'TODO',
@@ -42,6 +43,7 @@ export default function ProjectBoardPage() {
   const queryClient = useQueryClient();
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [activeColumn, setActiveColumn] = useState<BoardColumnType | null>(null);
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [recentlyUpdatedColumn, setRecentlyUpdatedColumn] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -111,6 +113,11 @@ export default function ProjectBoardPage() {
         (old ?? []).filter((t) => t.id !== id),
       );
     },
+    onColumnReordered: (columns) => {
+      queryClient.setQueryData<Project>(['project', params.projectId], (old) =>
+        old ? { ...old, columns } : old,
+      );
+    },
   });
 
   function upsertTask(task: Task) {
@@ -170,13 +177,51 @@ export default function ProjectBoardPage() {
     },
   });
 
+  const reorderColumnMutation = useMutation({
+    mutationFn: ({ columnId, position }: { columnId: string; position: number }) =>
+      reorderColumn(params.projectId, columnId, position),
+  });
+
   function handleDragStart(event: DragStartEvent) {
+    if (event.active.data.current?.type === 'column') {
+      const col = project?.columns.find((c) => c.id === event.active.id) ?? null;
+      setActiveColumn(col);
+      return;
+    }
     const task = (tasks ?? []).find((t) => t.id === event.active.id);
     setActiveTask(task ?? null);
   }
 
   function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
     setActiveTask(null);
+    setActiveColumn(null);
+    if (!over) return;
+
+    if (active.data.current?.type === 'column') {
+      handleColumnDragEnd(active.id as string, over.id as string);
+      return;
+    }
+    handleTaskDragEnd(event);
+  }
+
+  function handleColumnDragEnd(activeId: string, overId: string) {
+    if (activeId === overId) return;
+    const cols = project?.columns ?? [];
+    const oldIndex = cols.findIndex((c) => c.id === activeId);
+    const newIndex = cols.findIndex((c) => c.id === overId);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Optimistic update: reorder columns in the project query cache immediately.
+    const reordered = arrayMove(cols, oldIndex, newIndex).map((c, i) => ({ ...c, position: i }));
+    queryClient.setQueryData<Project>(['project', params.projectId], (old) =>
+      old ? { ...old, columns: reordered } : old,
+    );
+
+    reorderColumnMutation.mutate({ columnId: activeId, position: newIndex });
+  }
+
+  function handleTaskDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over) return;
 
@@ -184,11 +229,14 @@ export default function ProjectBoardPage() {
     const task = (tasks ?? []).find((t) => t.id === taskId);
     if (!task) return;
 
-    // `over.id` is either a column id (dropped on empty column space) or
-    // another task's id (dropped on/between cards) — resolve to a column
-    // either way.
+    // over.id is a task id, a column's zone droppable (`zone:<columnId>`),
+    // or the column sortable itself — resolve to a column id in all cases.
     const overTask = (tasks ?? []).find((t) => t.id === over.id);
-    const targetColumnId = overTask ? overTask.columnId : (over.id as string);
+    const targetColumnId =
+      overTask?.columnId ??
+      (over.data.current?.columnId as string | undefined) ??
+      (over.id as string);
+
     const targetColumn = project?.columns.find((c) => c.id === targetColumnId);
     if (!targetColumn) return;
 
@@ -199,15 +247,12 @@ export default function ProjectBoardPage() {
 
     const status = STATUS_BY_COLUMN_NAME[targetColumn.name] ?? task.status;
 
-    // Optimistic update: move the card immediately, reconcile with the
-    // server response (and with whatever the socket broadcasts back) after.
     queryClient.setQueryData<Task[]>(['tasks', params.projectId], (old) =>
       (old ?? []).map((t) =>
         t.id === taskId ? { ...t, columnId: targetColumnId, position: newPosition, status } : t,
       ),
     );
     flashColumn(targetColumnId);
-
     moveMutation.mutate({ taskId, columnId: targetColumnId, position: newPosition, status });
   }
 
@@ -252,22 +297,34 @@ export default function ProjectBoardPage() {
 
       <div className="relative z-10 flex flex-1 gap-4 overflow-x-auto p-6 sm:p-8">
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          {project?.columns.map((column, idx) => (
-            <BoardColumn
-              key={column.id}
-              column={column}
-              index={idx}
-              tasks={tasksByColumn.get(column.id) ?? []}
-              justUpdated={recentlyUpdatedColumn === column.id}
-              searchQuery={debouncedQuery}
-              onCreateTask={(columnId, title) => createMutation.mutate({ columnId, title })}
-              onDeleteTask={(taskId) => deleteMutation.mutate(taskId)}
-              onOpenTask={(task) => setOpenTask(task)}
-            />
-          ))}
+          <SortableContext
+            items={(project?.columns ?? []).map((c) => c.id)}
+            strategy={horizontalListSortingStrategy}
+          >
+            {project?.columns.map((column, idx) => (
+              <BoardColumn
+                key={column.id}
+                column={column}
+                index={idx}
+                tasks={tasksByColumn.get(column.id) ?? []}
+                justUpdated={recentlyUpdatedColumn === column.id}
+                searchQuery={debouncedQuery}
+                onCreateTask={(columnId, title) => createMutation.mutate({ columnId, title })}
+                onDeleteTask={(taskId) => deleteMutation.mutate(taskId)}
+                onOpenTask={(task) => setOpenTask(task)}
+              />
+            ))}
+          </SortableContext>
 
           <DragOverlay>
-            {activeTask ? (
+            {activeColumn ? (
+              <div className="glass flex w-72 shrink-0 flex-col rounded-2xl shadow-card opacity-90 rotate-1">
+                <div className="flex items-center gap-2 border-b border-border px-3.5 py-3">
+                  <span className="h-2 w-2 rounded-full bg-muted" />
+                  <h3 className="text-sm font-semibold text-ink">{activeColumn.name}</h3>
+                </div>
+              </div>
+            ) : activeTask ? (
               <TaskCard task={activeTask} onDelete={() => {}} onOpen={() => {}} />
             ) : null}
           </DragOverlay>

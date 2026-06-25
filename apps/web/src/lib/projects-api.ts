@@ -1,5 +1,5 @@
 import { api } from './api-client';
-import type { Project } from '@/types';
+import type { BoardColumn, Project } from '@/types';
 
 export async function fetchProjects(): Promise<Project[]> {
   const { data } = await api.get<Project[]>('/projects');
@@ -16,5 +16,17 @@ export async function createProject(payload: {
   description?: string;
 }): Promise<Project> {
   const { data } = await api.post<Project>('/projects', payload);
+  return data;
+}
+
+export async function reorderColumn(
+  projectId: string,
+  columnId: string,
+  position: number,
+): Promise<BoardColumn[]> {
+  const { data } = await api.patch<BoardColumn[]>(
+    `/projects/${projectId}/columns/${columnId}/reorder`,
+    { position },
+  );
   return data;
 }

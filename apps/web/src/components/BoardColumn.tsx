@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import clsx from 'clsx';
 import type { BoardColumn as BoardColumnType, Task } from '@/types';
 import { TaskCard } from './TaskCard';
@@ -39,7 +40,26 @@ export function BoardColumn({
   justUpdated: boolean;
   searchQuery?: string;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: column.id, data: { column } });
+  // Makes the column itself draggable for horizontal reordering. Listeners
+  // are applied to the header only so the card area stays a normal drop target.
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setSortableRef,
+    transform,
+    transition,
+    isDragging: isColumnDragging,
+  } = useSortable({ id: column.id, data: { type: 'column', columnId: column.id } });
+
+  // Separate droppable ID for the task list area to avoid ID collision with
+  // the column's own sortable droppable.
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: `zone:${column.id}`,
+    data: { type: 'taskzone', columnId: column.id },
+  });
+
+  const columnStyle = { transform: CSS.Transform.toString(transform), transition };
+
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
 
@@ -53,13 +73,20 @@ export function BoardColumn({
 
   return (
     <div
+      ref={setSortableRef}
+      style={columnStyle}
       className={clsx(
         'glass flex w-72 shrink-0 flex-col rounded-2xl shadow-card transition-shadow',
         isOver && 'ring-2 ring-violet',
         justUpdated && STATUS_GLOW[column.name],
+        isColumnDragging && 'opacity-50',
       )}
     >
-      <div className="flex items-center gap-2 border-b border-border px-3.5 py-3">
+      <div
+        className="flex cursor-grab items-center gap-2 border-b border-border px-3.5 py-3 active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
         <span className={clsx('h-2 w-2 rounded-full', STATUS_DOT[column.name] ?? 'bg-muted')} />
         <h3 className="text-sm font-semibold text-ink">{column.name}</h3>
         <span className="ml-auto rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-muted">
@@ -67,7 +94,7 @@ export function BoardColumn({
         </span>
       </div>
 
-      <div ref={setNodeRef} className="flex min-h-[120px] flex-1 flex-col gap-2 p-2.5">
+      <div ref={setDropRef} className="flex min-h-[120px] flex-1 flex-col gap-2 p-2.5">
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
             <TaskCard

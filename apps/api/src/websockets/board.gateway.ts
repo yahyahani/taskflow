@@ -88,4 +88,8 @@ export class BoardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   emitTaskDeleted(organizationId: string, payload: unknown) {
     this.server.to(`org:${organizationId}`).emit('task:deleted', payload);
   }
+
+  emitColumnReordered(organizationId: string, payload: unknown) {
+    this.server.to(`org:${organizationId}`).emit('column:reordered', payload);
+  }
 }

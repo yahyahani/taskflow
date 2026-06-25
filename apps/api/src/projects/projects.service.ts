@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { BoardGateway } from '../websockets/board.gateway';
 import { CreateProjectDto, UpdateProjectDto } from './dto/project.dto';
 
 const DEFAULT_COLUMNS = ['To Do', 'In Progress', 'In Review', 'Done'];
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly boardGateway: BoardGateway,
+  ) {}
 
   findAll(organizationId: string) {
     return this.prisma.project.findMany({
@@ -54,6 +58,38 @@ export class ProjectsService {
     await this.assertBelongsToOrg(organizationId, projectId);
     await this.prisma.project.delete({ where: { id: projectId } });
     return { success: true };
+  }
+
+  async reorderColumn(
+    organizationId: string,
+    projectId: string,
+    columnId: string,
+    newPosition: number,
+  ) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, organizationId },
+      include: { columns: { orderBy: { position: 'asc' } } },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    const column = project.columns.find((c) => c.id === columnId);
+    if (!column) throw new NotFoundException('Column not found');
+
+    // Remove from current position, insert at new position, then persist all
+    // updated indices in one transaction so positions are always consistent.
+    const rest = project.columns.filter((c) => c.id !== columnId);
+    const clamped = Math.max(0, Math.min(newPosition, rest.length));
+    rest.splice(clamped, 0, column);
+
+    await this.prisma.$transaction(
+      rest.map((col, idx) =>
+        this.prisma.boardColumn.update({ where: { id: col.id }, data: { position: idx } }),
+      ),
+    );
+
+    const reordered = rest.map((col, idx) => ({ ...col, position: idx }));
+    this.boardGateway.emitColumnReordered(organizationId, reordered);
+    return reordered;
   }
 
   // Defense in depth: even though routes are guarded, every mutation

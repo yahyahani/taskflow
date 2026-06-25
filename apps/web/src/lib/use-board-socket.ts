@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuthStore } from '@/store/auth.store';
-import type { Task } from '@/types';
+import type { BoardColumn, Task } from '@/types';
 
 const WS_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -12,6 +12,7 @@ interface BoardSocketHandlers {
   onTaskUpdated?: (task: Task) => void;
   onTaskMoved?: (task: Task) => void;
   onTaskDeleted?: (payload: { id: string }) => void;
+  onColumnReordered?: (columns: BoardColumn[]) => void;
 }
 
 /**
@@ -46,6 +47,9 @@ export function useBoardSocket(handlers: BoardSocketHandlers) {
     socket.on('task:moved', (task: Task) => handlersRef.current.onTaskMoved?.(task));
     socket.on('task:deleted', (payload: { id: string }) =>
       handlersRef.current.onTaskDeleted?.(payload),
+    );
+    socket.on('column:reordered', (columns: BoardColumn[]) =>
+      handlersRef.current.onColumnReordered?.(columns),
     );
 
     return () => {

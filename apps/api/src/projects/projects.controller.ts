@@ -14,7 +14,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { ProjectsService } from './projects.service';
-import { CreateProjectDto, UpdateProjectDto } from './dto/project.dto';
+import { CreateProjectDto, ReorderColumnDto, UpdateProjectDto } from './dto/project.dto';
 import { AuthenticatedRequest } from '../common/types/auth.types';
 
 @Controller('projects')
@@ -60,5 +60,20 @@ export class ProjectsController {
     @Param('id') id: string,
   ) {
     return this.projectsService.remove(tenant.organizationId, id);
+  }
+
+  @Patch(':projectId/columns/:columnId/reorder')
+  reorderColumn(
+    @CurrentTenant() tenant: AuthenticatedRequest['tenant'],
+    @Param('projectId') projectId: string,
+    @Param('columnId') columnId: string,
+    @Body() dto: ReorderColumnDto,
+  ) {
+    return this.projectsService.reorderColumn(
+      tenant.organizationId,
+      projectId,
+      columnId,
+      dto.position,
+    );
   }
 }

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 
 export class CreateProjectDto {
   @IsString()
@@ -19,4 +19,10 @@ export class UpdateProjectDto {
   @IsOptional()
   @IsString()
   description?: string;
+}
+
+export class ReorderColumnDto {
+  @IsInt()
+  @Min(0)
+  position: number;
 }
