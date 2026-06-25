@@ -63,6 +63,15 @@ export interface Task {
   labels: Label[];
 }
 
+export interface Activity {
+  id: string;
+  type: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_MOVED';
+  metadata: { columnName?: string } | null;
+  createdAt: string;
+  user: { id: string; name: string };
+  task: { id: string; title: string };
+}
+
 export interface Comment {
   id: string;
   body: string;

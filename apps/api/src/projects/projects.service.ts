@@ -92,6 +92,23 @@ export class ProjectsService {
     return reordered;
   }
 
+  async getActivities(organizationId: string, projectId: string) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, organizationId },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    return this.prisma.activity.findMany({
+      where: { task: { projectId, project: { organizationId } } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        user: { select: { id: true, name: true } },
+        task: { select: { id: true, title: true } },
+      },
+    });
+  }
+
   // Defense in depth: even though routes are guarded, every mutation
   // re-verifies the row actually belongs to the caller's org before
   // touching it, in case a projectId from another tenant is passed in.

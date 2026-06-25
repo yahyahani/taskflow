@@ -142,7 +142,11 @@ export class TasksService {
         position: dto.position,
         status: dto.status,
         activities: {
-          create: { type: 'TASK_MOVED', userId, metadata: { columnId: dto.columnId } },
+          create: {
+            type: 'TASK_MOVED',
+            userId,
+            metadata: { columnId: dto.columnId, columnName: column.name },
+          },
         },
       },
       include: TASK_INCLUDE,

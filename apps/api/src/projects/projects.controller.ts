@@ -62,6 +62,14 @@ export class ProjectsController {
     return this.projectsService.remove(tenant.organizationId, id);
   }
 
+  @Get(':id/activities')
+  getActivities(
+    @CurrentTenant() tenant: AuthenticatedRequest['tenant'],
+    @Param('id') id: string,
+  ) {
+    return this.projectsService.getActivities(tenant.organizationId, id);
+  }
+
   @Patch(':projectId/columns/:columnId/reorder')
   reorderColumn(
     @CurrentTenant() tenant: AuthenticatedRequest['tenant'],

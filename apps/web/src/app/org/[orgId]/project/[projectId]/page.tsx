@@ -19,6 +19,7 @@ import { createTask, deleteTask, fetchTasks, moveTask, searchTasks, updateTask }
 import { useAuthStore } from '@/store/auth.store';
 import { useThemeStore } from '@/store/theme.store';
 import { useBoardSocket } from '@/lib/use-board-socket';
+import { ActivityPanel } from '@/components/ActivityPanel';
 import { BoardColumn } from '@/components/BoardColumn';
 import { TaskCard } from '@/components/TaskCard';
 import { TaskDetailModal } from '@/components/TaskDetailModal';
@@ -48,6 +49,7 @@ export default function ProjectBoardPage() {
   const [recentlyUpdatedColumn, setRecentlyUpdatedColumn] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [showActivity, setShowActivity] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -292,6 +294,16 @@ export default function ProjectBoardPage() {
               </button>
             )}
           </div>
+          <button
+            onClick={() => setShowActivity((v) => !v)}
+            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+              showActivity
+                ? 'border-violet bg-violet/10 text-violet'
+                : 'border-border text-muted hover:text-ink'
+            }`}
+          >
+            Activity
+          </button>
           <ThemeToggle />
         </div>
       </header>
@@ -337,6 +349,13 @@ export default function ProjectBoardPage() {
           task={openTask}
           onClose={() => setOpenTask(null)}
           onSave={(updates) => updateMutation.mutate({ taskId: openTask.id, ...updates })}
+        />
+      )}
+
+      {showActivity && (
+        <ActivityPanel
+          projectId={params.projectId}
+          onClose={() => setShowActivity(false)}
         />
       )}
     </main>
