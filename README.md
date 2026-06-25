@@ -35,9 +35,21 @@ layered security in a monorepo setup.
 - **Multi-tenant auth** — JWT access tokens (15 min) with rotating refresh tokens (30 days, hashed
   at rest). Presenting a refresh token immediately invalidates it and issues a fresh one; replaying a
   revoked token is treated as a theft signal.
-- **Real-time Kanban board** — drag-and-drop columns and cards via `@dnd-kit`. Moves are broadcast
+- **Real-time Kanban board** — drag-and-drop task cards via `@dnd-kit`. Moves are broadcast
   instantly over Socket.io to every connected teammate in the same organization — and only that
   organization.
+- **Column reordering** — board columns are themselves drag-and-drop sortable. Positions are
+  persisted atomically in a single database transaction; the new order is broadcast over WebSocket so
+  every connected client updates without a page refresh.
+- **Full-text task search** — a debounced search bar in the board header queries task titles and
+  descriptions via a dedicated API endpoint, scoped to the active organization. Matches are
+  highlighted inline on the cards.
+- **Task comments** — each task carries a live comment thread. Comments are posted and deleted
+  instantly via optimistic React Query cache updates; only the author can delete their own comments.
+- **Member management** — invite any existing account to your organization by email address. Members
+  are listed with role badges (`OWNER` / `ADMIN` / `MEMBER`). `OWNER` and `ADMIN` can change member
+  roles and remove members; privilege escalation is blocked server-side (ADMINs cannot assign the
+  OWNER role or remove other ADMINs).
 - **Labels** — create color-coded labels scoped to your organization and attach them to any task
   across all your projects.
 - **Light / dark theme** — follows the system default with a manual toggle, persisted per user.
