@@ -20,6 +20,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { useThemeStore } from '@/store/theme.store';
 import { useBoardSocket } from '@/lib/use-board-socket';
 import { ActivityPanel } from '@/components/ActivityPanel';
+import { BoardFilters } from '@/components/BoardFilters';
 import { BoardColumn } from '@/components/BoardColumn';
 import { TaskCard } from '@/components/TaskCard';
 import { TaskDetailModal } from '@/components/TaskDetailModal';
@@ -50,6 +51,10 @@ export default function ProjectBoardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [showActivity, setShowActivity] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterAssigneeId, setFilterAssigneeId] = useState('');
+  const [filterLabelIds, setFilterLabelIds] = useState<string[]>([]);
+  const [filterPriority, setFilterPriority] = useState<Priority[]>([]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -85,10 +90,23 @@ export default function ProjectBoardPage() {
     enabled: !!activeOrganization && debouncedQuery.length > 0,
   });
 
-  const displayTasks = useMemo(
-    () => (debouncedQuery ? (searchResults ?? []) : (tasks ?? [])),
-    [debouncedQuery, searchResults, tasks],
-  );
+  const displayTasks = useMemo(() => {
+    let result = debouncedQuery ? (searchResults ?? []) : (tasks ?? []);
+    if (filterAssigneeId === '__unassigned__') {
+      result = result.filter((t) => !t.assignee);
+    } else if (filterAssigneeId) {
+      result = result.filter((t) => t.assignee?.id === filterAssigneeId);
+    }
+    if (filterLabelIds.length > 0) {
+      result = result.filter((t) =>
+        filterLabelIds.every((id) => t.labels.some((l) => l.id === id)),
+      );
+    }
+    if (filterPriority.length > 0) {
+      result = result.filter((t) => filterPriority.includes(t.priority));
+    }
+    return result;
+  }, [debouncedQuery, searchResults, tasks, filterAssigneeId, filterLabelIds, filterPriority]);
 
   const tasksByColumn = useMemo(() => {
     const map = new Map<string, Task[]>();
@@ -331,6 +349,21 @@ export default function ProjectBoardPage() {
             )}
           </div>
           <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={`relative rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+              showFilters || filterAssigneeId || filterLabelIds.length || filterPriority.length
+                ? 'border-violet bg-violet/10 text-violet'
+                : 'border-border text-muted hover:text-ink'
+            }`}
+          >
+            Filter
+            {(filterAssigneeId ? 1 : 0) + filterLabelIds.length + filterPriority.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-violet px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {(filterAssigneeId ? 1 : 0) + filterLabelIds.length + filterPriority.length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setShowActivity((v) => !v)}
             className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
               showActivity
@@ -343,6 +376,31 @@ export default function ProjectBoardPage() {
           <ThemeToggle />
         </div>
       </header>
+
+      {showFilters && (
+        <BoardFilters
+          orgId={params.orgId}
+          filterAssigneeId={filterAssigneeId}
+          filterLabelIds={filterLabelIds}
+          filterPriority={filterPriority}
+          onAssigneeChange={setFilterAssigneeId}
+          onLabelToggle={(id) =>
+            setFilterLabelIds((ids) =>
+              ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
+            )
+          }
+          onPriorityToggle={(p) =>
+            setFilterPriority((ps) =>
+              ps.includes(p) ? ps.filter((x) => x !== p) : [...ps, p],
+            )
+          }
+          onClear={() => {
+            setFilterAssigneeId('');
+            setFilterLabelIds([]);
+            setFilterPriority([]);
+          }}
+        />
+      )}
 
       <div className="relative z-10 flex flex-1 gap-4 overflow-x-auto p-6 sm:p-8">
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
