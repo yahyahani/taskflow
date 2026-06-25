@@ -69,6 +69,12 @@ export default function OrgDashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           <ThemeToggle />
+          <Link
+            href={`/org/${params.orgId}/members`}
+            className="text-sm font-medium text-muted hover:text-ink"
+          >
+            Members
+          </Link>
           <Link href="/orgs" className="text-sm font-medium text-muted hover:text-ink">
             Switch workspace
           </Link>

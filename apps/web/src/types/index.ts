@@ -19,6 +19,17 @@ export interface Membership {
   organization: Organization;
 }
 
+export interface Member {
+  id: string;
+  role: Role;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
 export interface BoardColumn {
   id: string;
   name: string;
