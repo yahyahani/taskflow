@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -27,6 +28,16 @@ export class TasksController {
     @Param('projectId') projectId: string,
   ) {
     return this.tasksService.findAllForProject(tenant.organizationId, projectId);
+  }
+
+  @Get('search')
+  search(
+    @CurrentTenant() tenant: AuthenticatedRequest['tenant'],
+    @Param('projectId') projectId: string,
+    @Query('q') q: string,
+  ) {
+    if (!q?.trim()) return [];
+    return this.tasksService.search(tenant.organizationId, projectId, q.trim());
   }
 
   @Post()

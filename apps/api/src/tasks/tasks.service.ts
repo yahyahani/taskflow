@@ -26,6 +26,23 @@ export class TasksService {
     return tasks.map(this.flattenLabels);
   }
 
+  async search(organizationId: string, projectId: string, q: string) {
+    await this.assertProjectInOrg(organizationId, projectId);
+    const tasks = await this.prisma.task.findMany({
+      where: {
+        projectId,
+        project: { organizationId },
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      include: TASK_INCLUDE,
+      orderBy: { position: 'asc' },
+    });
+    return tasks.map(this.flattenLabels);
+  }
+
   async create(organizationId: string, projectId: string, userId: string, dto: CreateTaskDto) {
     await this.assertProjectInOrg(organizationId, projectId);
     if (dto.assigneeId) await this.assertUserInOrg(organizationId, dto.assigneeId);

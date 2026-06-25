@@ -14,7 +14,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { fetchProject } from '@/lib/projects-api';
-import { createTask, deleteTask, fetchTasks, moveTask, updateTask } from '@/lib/tasks-api';
+import { createTask, deleteTask, fetchTasks, moveTask, searchTasks, updateTask } from '@/lib/tasks-api';
 import { useAuthStore } from '@/store/auth.store';
 import { useThemeStore } from '@/store/theme.store';
 import { useBoardSocket } from '@/lib/use-board-socket';
@@ -44,6 +44,8 @@ export default function ProjectBoardPage() {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [recentlyUpdatedColumn, setRecentlyUpdatedColumn] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -55,6 +57,11 @@ export default function ProjectBoardPage() {
   useEffect(() => {
     if (!user) router.replace('/login');
   }, [user, router]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const { data: project } = useQuery({
     queryKey: ['project', params.projectId],
@@ -68,16 +75,27 @@ export default function ProjectBoardPage() {
     enabled: !!activeOrganization,
   });
 
+  const { data: searchResults } = useQuery({
+    queryKey: ['tasks', params.projectId, 'search', debouncedQuery],
+    queryFn: () => searchTasks(params.projectId, debouncedQuery),
+    enabled: !!activeOrganization && debouncedQuery.length > 0,
+  });
+
+  const displayTasks = useMemo(
+    () => (debouncedQuery ? (searchResults ?? []) : (tasks ?? [])),
+    [debouncedQuery, searchResults, tasks],
+  );
+
   const tasksByColumn = useMemo(() => {
     const map = new Map<string, Task[]>();
-    for (const task of tasks ?? []) {
+    for (const task of displayTasks) {
       const list = map.get(task.columnId) ?? [];
       list.push(task);
       map.set(task.columnId, list);
     }
     for (const list of map.values()) list.sort((a, b) => a.position - b.position);
     return map;
-  }, [tasks]);
+  }, [displayTasks]);
 
   // --- Real-time: merge socket events straight into the React Query cache
   // so every connected client sees moves/creates/deletes without a refetch.
@@ -202,7 +220,32 @@ export default function ProjectBoardPage() {
         </Link>
         <span className="text-muted">/</span>
         <h1 className="font-display font-bold text-ink">{project?.name}</h1>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          <div className="relative">
+            <svg
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search tasks…"
+              className="w-44 rounded-lg border border-border bg-surface py-1.5 pl-8 pr-7 text-sm text-ink placeholder:text-muted focus:border-violet focus:outline-none sm:w-56"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-lg leading-none text-muted hover:text-ink"
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
           <ThemeToggle />
         </div>
       </header>
@@ -216,6 +259,7 @@ export default function ProjectBoardPage() {
               index={idx}
               tasks={tasksByColumn.get(column.id) ?? []}
               justUpdated={recentlyUpdatedColumn === column.id}
+              searchQuery={debouncedQuery}
               onCreateTask={(columnId, title) => createMutation.mutate({ columnId, title })}
               onDeleteTask={(taskId) => deleteMutation.mutate(taskId)}
               onOpenTask={(task) => setOpenTask(task)}

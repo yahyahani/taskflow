@@ -51,3 +51,8 @@ export async function moveTask(
 export async function deleteTask(projectId: string, taskId: string): Promise<void> {
   await api.delete(`/projects/${projectId}/tasks/${taskId}`);
 }
+
+export async function searchTasks(projectId: string, q: string): Promise<Task[]> {
+  const { data } = await api.get<Task[]>(`/projects/${projectId}/tasks/search`, { params: { q } });
+  return data;
+}

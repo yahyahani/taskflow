@@ -28,6 +28,7 @@ export function BoardColumn({
   onDeleteTask,
   onOpenTask,
   justUpdated,
+  searchQuery = '',
 }: {
   column: BoardColumnType;
   index: number;
@@ -36,6 +37,7 @@ export function BoardColumn({
   onDeleteTask: (taskId: string) => void;
   onOpenTask: (task: Task) => void;
   justUpdated: boolean;
+  searchQuery?: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id, data: { column } });
   const [adding, setAdding] = useState(false);
@@ -68,7 +70,13 @@ export function BoardColumn({
       <div ref={setNodeRef} className="flex min-h-[120px] flex-1 flex-col gap-2 p-2.5">
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onDelete={onDeleteTask} onOpen={onOpenTask} />
+            <TaskCard
+              key={task.id}
+              task={task}
+              onDelete={onDeleteTask}
+              onOpen={onOpenTask}
+              searchQuery={searchQuery}
+            />
           ))}
         </SortableContext>
       </div>

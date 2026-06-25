@@ -28,6 +28,25 @@ function initials(name: string) {
     .toUpperCase();
 }
 
+function Highlight({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="rounded bg-amber/30 text-inherit not-italic">
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 function formatDueDate(iso: string) {
   const date = new Date(iso);
   const today = new Date();
@@ -42,10 +61,12 @@ export function TaskCard({
   task,
   onDelete,
   onOpen,
+  searchQuery = '',
 }: {
   task: Task;
   onDelete: (id: string) => void;
   onOpen: (task: Task) => void;
+  searchQuery?: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -92,7 +113,9 @@ export function TaskCard({
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2">
           <span className={clsx('mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full', STATUS_DOT[task.status])} />
-          <p className="text-sm text-ink">{task.title}</p>
+          <p className="text-sm text-ink">
+            <Highlight text={task.title} query={searchQuery} />
+          </p>
         </div>
         <button
           onClick={(e) => {
