@@ -51,6 +51,10 @@ layered security in a monorepo setup.
 - **Column reordering** — board columns are themselves drag-and-drop sortable. Positions are
   persisted atomically in a single database transaction; the new order is broadcast over WebSocket so
   every connected client updates without a page refresh.
+- **Board filters** — filter tasks by assignee (including an "Unassigned" option), label, and
+  priority. Filters are applied client-side from the React Query cache with no extra requests,
+  compose with full-text search, and can be combined freely. A badge on the Filter button shows
+  how many filters are active; a single "Clear filters" click resets all three dimensions.
 - **Full-text task search** — a debounced search bar in the board header queries task titles and
   descriptions via a dedicated API endpoint, scoped to the active organization. Matches are
   highlighted inline on the cards.
