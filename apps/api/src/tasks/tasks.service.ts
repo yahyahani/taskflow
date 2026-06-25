@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { BoardGateway } from '../websockets/board.gateway';
 import { CreateTaskDto, MoveTaskDto, UpdateTaskDto } from './dto/task.dto';
@@ -28,6 +28,8 @@ export class TasksService {
 
   async create(organizationId: string, projectId: string, userId: string, dto: CreateTaskDto) {
     await this.assertProjectInOrg(organizationId, projectId);
+    if (dto.assigneeId) await this.assertUserInOrg(organizationId, dto.assigneeId);
+    if (dto.labelIds?.length) await this.assertLabelsInOrg(organizationId, dto.labelIds);
 
     // Verify the column belongs to this project so a client can't mix column
     // and project IDs from different projects within the same org.
@@ -72,6 +74,8 @@ export class TasksService {
 
   async update(organizationId: string, taskId: string, userId: string, dto: UpdateTaskDto) {
     await this.assertTaskInOrg(organizationId, taskId);
+    if (dto.assigneeId) await this.assertUserInOrg(organizationId, dto.assigneeId);
+    if (dto.labelIds?.length) await this.assertLabelsInOrg(organizationId, dto.labelIds);
     const { labelIds, dueDate, ...rest } = dto;
 
     const task = await this.prisma.task.update({
@@ -106,7 +110,12 @@ export class TasksService {
    * client redraws the board without polling.
    */
   async move(organizationId: string, taskId: string, userId: string, dto: MoveTaskDto) {
-    await this.assertTaskInOrg(organizationId, taskId);
+    const existing = await this.assertTaskInOrg(organizationId, taskId);
+
+    const column = await this.prisma.boardColumn.findFirst({
+      where: { id: dto.columnId, projectId: existing.projectId },
+    });
+    if (!column) throw new NotFoundException('Column not found in this project');
 
     const task = await this.prisma.task.update({
       where: { id: taskId },
@@ -153,6 +162,25 @@ export class TasksService {
     // same principle applied throughout the rest of the API).
     if (!task || task.project.organizationId !== organizationId) {
       throw new NotFoundException('Task not found');
+    }
+    return task;
+  }
+
+  private async assertUserInOrg(organizationId: string, userId: string) {
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_organizationId: { userId, organizationId } },
+    });
+    if (!membership) throw new BadRequestException('Assignee is not a member of this organization');
+  }
+
+  private async assertLabelsInOrg(organizationId: string, labelIds: string[]) {
+    if (labelIds.length === 0) return;
+    const found = await this.prisma.label.findMany({
+      where: { id: { in: labelIds }, organizationId },
+      select: { id: true },
+    });
+    if (found.length !== labelIds.length) {
+      throw new BadRequestException('One or more labels do not belong to this organization');
     }
   }
 
