@@ -150,6 +150,8 @@ export default function ProjectBoardPage() {
       ...payload
     }: {
       taskId: string;
+      description?: string;
+      assigneeId?: string | null;
       dueDate?: string;
       priority?: Priority;
       labelIds?: string[];
@@ -347,6 +349,7 @@ export default function ProjectBoardPage() {
       {openTask && (
         <TaskDetailModal
           task={openTask}
+          orgId={params.orgId}
           onClose={() => setOpenTask(null)}
           onSave={(updates) => updateMutation.mutate({ taskId: openTask.id, ...updates })}
         />

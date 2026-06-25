@@ -3,9 +3,10 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createComment, deleteComment, fetchComments } from '@/lib/comments-api';
+import { fetchMembers } from '@/lib/organizations-api';
 import { useAuthStore } from '@/store/auth.store';
 import { LabelPicker } from './LabelPicker';
-import type { Comment, Priority, Task } from '@/types';
+import type { Comment, Member, Priority, Task } from '@/types';
 
 const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
   { value: 'LOW',    label: 'Low' },
@@ -13,6 +14,22 @@ const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
   { value: 'HIGH',   label: 'High' },
   { value: 'URGENT', label: 'Urgent' },
 ];
+
+const AVATAR_COLORS = ['bg-violet', 'bg-sky', 'bg-coral', 'bg-mint', 'bg-amber'];
+
+function avatarColor(name: string) {
+  const sum = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  return AVATAR_COLORS[sum % AVATAR_COLORS.length];
+}
+
+function initials(name: string) {
+  return name
+    .split(' ')
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
 
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -26,32 +43,40 @@ function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function initials(name: string) {
-  return name
-    .split(' ')
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-}
-
 export function TaskDetailModal({
   task,
+  orgId,
   onClose,
   onSave,
 }: {
   task: Task;
+  orgId: string;
   onClose: () => void;
-  onSave: (updates: { dueDate?: string; priority?: Priority; labelIds?: string[] }) => void;
+  onSave: (updates: {
+    description?: string;
+    assigneeId?: string | null;
+    dueDate?: string;
+    priority?: Priority;
+    labelIds?: string[];
+  }) => void;
 }) {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
 
+  const [description, setDescription] = useState(task.description ?? '');
+  const [assigneeId, setAssigneeId] = useState(task.assignee?.id ?? '');
   const [labelIds, setLabelIds] = useState(task.labels.map((l) => l.id));
   const [dueDate, setDueDate] = useState(task.dueDate ? task.dueDate.slice(0, 10) : '');
   const [priority, setPriority] = useState<Priority>(task.priority);
   const [body, setBody] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const { data: members = [] } = useQuery<Member[]>({
+    queryKey: ['members', orgId],
+    queryFn: () => fetchMembers(orgId),
+  });
+
+  const selectedMember = members.find((m) => m.user.id === assigneeId);
 
   const commentsKey = ['comments', task.id];
 
@@ -85,7 +110,13 @@ export function TaskDetailModal({
   }
 
   function handleSave() {
-    onSave({ dueDate: dueDate || undefined, priority, labelIds });
+    onSave({
+      description: description || undefined,
+      assigneeId: assigneeId || null,
+      dueDate: dueDate || undefined,
+      priority,
+      labelIds,
+    });
     onClose();
   }
 
@@ -102,7 +133,7 @@ export function TaskDetailModal({
     >
       <div
         className="glass flex w-full max-w-lg flex-col rounded-2xl shadow-card-hover"
-        style={{ maxHeight: 'min(90vh, 700px)' }}
+        style={{ maxHeight: 'min(90vh, 740px)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -116,11 +147,65 @@ export function TaskDetailModal({
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-6 pb-0">
           <div className="mt-5 space-y-5">
+
+            {/* Description */}
+            <div>
+              <label htmlFor="description" className="mb-1.5 block text-sm font-medium text-ink">
+                Description
+              </label>
+              <textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Add a description…"
+                rows={3}
+                className="w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-violet focus:outline-none"
+              />
+            </div>
+
+            {/* Assignee */}
+            <div>
+              <label htmlFor="assignee" className="mb-1.5 block text-sm font-medium text-ink">
+                Assignee
+              </label>
+              <div className="flex items-center gap-2">
+                {selectedMember ? (
+                  <div
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${avatarColor(selectedMember.user.name)}`}
+                  >
+                    {initials(selectedMember.user.name)}
+                  </div>
+                ) : (
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-border text-muted">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                  </div>
+                )}
+                <select
+                  id="assignee"
+                  value={assigneeId}
+                  onChange={(e) => setAssigneeId(e.target.value)}
+                  className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-violet focus:outline-none"
+                >
+                  <option value="">Unassigned</option>
+                  {members.map((m) => (
+                    <option key={m.user.id} value={m.user.id}>
+                      {m.user.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Labels */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-ink">Labels</label>
               <LabelPicker selectedIds={labelIds} onToggle={toggleLabel} />
             </div>
 
+            {/* Priority + Due date */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="priority" className="mb-1.5 block text-sm font-medium text-ink">

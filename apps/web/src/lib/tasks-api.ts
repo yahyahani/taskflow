@@ -27,7 +27,7 @@ export async function updateTask(
   payload: {
     title?: string;
     description?: string;
-    assigneeId?: string;
+    assigneeId?: string | null;
     dueDate?: string;
     priority?: Priority;
     labelIds?: string[];
