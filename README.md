@@ -35,6 +35,9 @@ layered security in a monorepo setup.
 - **Multi-tenant auth** — JWT access tokens (15 min) with rotating refresh tokens (30 days, hashed
   at rest). Presenting a refresh token immediately invalidates it and issues a fresh one; replaying a
   revoked token is treated as a theft signal.
+- **Task priority** — each task carries a priority level (`Low` / `Medium` / `High` / `Urgent`).
+  Color-coded badges appear on cards (grey → sky → amber → coral); Medium is hidden to keep the
+  board uncluttered. Priority is editable inline from the task detail modal.
 - **Real-time Kanban board** — drag-and-drop task cards via `@dnd-kit`. Moves are broadcast
   instantly over Socket.io to every connected teammate in the same organization — and only that
   organization.
