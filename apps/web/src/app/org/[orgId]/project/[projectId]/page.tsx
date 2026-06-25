@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -55,6 +55,8 @@ export default function ProjectBoardPage() {
   const [filterAssigneeId, setFilterAssigneeId] = useState('');
   const [filterLabelIds, setFilterLabelIds] = useState<string[]>([]);
   const [filterPriority, setFilterPriority] = useState<Priority[]>([]);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -71,6 +73,29 @@ export default function ProjectBoardPage() {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName;
+      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+      if (e.key === 'Escape') {
+        if (showShortcuts) { setShowShortcuts(false); return; }
+        if (openTask) { setOpenTask(null); return; }
+        if (showActivity) { setShowActivity(false); return; }
+        if (showFilters) { setShowFilters(false); return; }
+        return;
+      }
+      if (isTyping) return;
+
+      if (e.key === '/') { e.preventDefault(); searchRef.current?.focus(); }
+      if (e.key === 'f' || e.key === 'F') setShowFilters((v) => !v);
+      if (e.key === 'a' || e.key === 'A') setShowActivity((v) => !v);
+      if (e.key === '?') setShowShortcuts((v) => !v);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [openTask, showActivity, showFilters, showShortcuts]);
 
   const { data: project } = useQuery({
     queryKey: ['project', params.projectId],
@@ -333,6 +358,7 @@ export default function ProjectBoardPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
             <input
+              ref={searchRef}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search tasks…"
@@ -372,6 +398,13 @@ export default function ProjectBoardPage() {
             }`}
           >
             Activity
+          </button>
+          <button
+            onClick={() => setShowShortcuts((v) => !v)}
+            className="rounded-lg border border-border px-2 py-1.5 text-xs font-bold text-muted hover:text-ink"
+            aria-label="Keyboard shortcuts"
+          >
+            ?
           </button>
           <ThemeToggle />
         </div>
@@ -456,6 +489,39 @@ export default function ProjectBoardPage() {
           projectId={params.projectId}
           onClose={() => setShowActivity(false)}
         />
+      )}
+
+      {showShortcuts && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          onClick={() => setShowShortcuts(false)}
+        >
+          <div
+            className="glass w-full max-w-xs rounded-2xl p-6 shadow-card-hover"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display font-bold text-ink">Keyboard shortcuts</h2>
+              <button onClick={() => setShowShortcuts(false)} className="text-muted hover:text-ink">×</button>
+            </div>
+            <ul className="space-y-2.5">
+              {[
+                { key: '/', label: 'Focus search' },
+                { key: 'F', label: 'Toggle filters' },
+                { key: 'A', label: 'Toggle activity' },
+                { key: '?', label: 'Show shortcuts' },
+                { key: 'Esc', label: 'Close panel / modal' },
+              ].map(({ key, label }) => (
+                <li key={key} className="flex items-center justify-between">
+                  <span className="text-sm text-muted">{label}</span>
+                  <kbd className="rounded-lg border border-border bg-surface-hover px-2 py-0.5 font-mono text-xs font-semibold text-ink">
+                    {key}
+                  </kbd>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       )}
     </main>
   );
