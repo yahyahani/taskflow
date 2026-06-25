@@ -70,6 +70,9 @@ layered security in a monorepo setup.
   OWNER role or remove other ADMINs).
 - **Labels** — create color-coded labels scoped to your organization and attach them to any task
   across all your projects.
+- **Keyboard shortcuts** — `/` focuses the search bar, `F` toggles filters, `A` toggles the
+  activity panel, `Esc` closes the open modal or panel, and `?` opens a shortcut cheat sheet.
+  Shortcuts are suppressed while typing in any input field.
 - **Light / dark theme** — follows the system default with a manual toggle, persisted per user.
 - **Docker support** — a single `docker compose up --build` starts Postgres, the API, and the web
   app; migrations run automatically on container start.
