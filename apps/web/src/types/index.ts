@@ -31,6 +31,12 @@ export interface Assignee {
   email: string;
 }
 
+export interface Label {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -41,6 +47,7 @@ export interface Task {
   columnId: string;
   projectId: string;
   assignee: Assignee | null;
+  labels: Label[];
 }
 
 export interface Project {
@@ -54,6 +61,5 @@ export interface Project {
 export interface AuthResponse {
   user: User;
   accessToken: string;
-  refreshToken: string;
   organization?: Organization;
 }

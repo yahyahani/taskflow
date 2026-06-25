@@ -14,11 +14,15 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { fetchProject } from '@/lib/projects-api';
-import { createTask, deleteTask, fetchTasks, moveTask } from '@/lib/tasks-api';
+import { createTask, deleteTask, fetchTasks, moveTask, updateTask } from '@/lib/tasks-api';
 import { useAuthStore } from '@/store/auth.store';
+import { useThemeStore } from '@/store/theme.store';
 import { useBoardSocket } from '@/lib/use-board-socket';
 import { BoardColumn } from '@/components/BoardColumn';
 import { TaskCard } from '@/components/TaskCard';
+import { TaskDetailModal } from '@/components/TaskDetailModal';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { MeshBackground } from '@/components/MeshBackground';
 import type { Task, TaskStatus } from '@/types';
 
 const STATUS_BY_COLUMN_NAME: Record<string, TaskStatus> = {
@@ -32,18 +36,21 @@ export default function ProjectBoardPage() {
   const router = useRouter();
   const params = useParams<{ orgId: string; projectId: string }>();
   const hydrate = useAuthStore((s) => s.hydrate);
+  const hydrateTheme = useThemeStore((s) => s.hydrate);
   const user = useAuthStore((s) => s.user);
   const activeOrganization = useAuthStore((s) => s.activeOrganization);
   const queryClient = useQueryClient();
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [openTask, setOpenTask] = useState<Task | null>(null);
   const [recentlyUpdatedColumn, setRecentlyUpdatedColumn] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+    hydrateTheme();
+  }, [hydrate, hydrateTheme]);
 
   useEffect(() => {
     if (!user) router.replace('/login');
@@ -107,6 +114,18 @@ export default function ProjectBoardPage() {
   const createMutation = useMutation({
     mutationFn: ({ columnId, title }: { columnId: string; title: string }) =>
       createTask(params.projectId, { title, columnId }),
+    onSuccess: (task) => upsertTask(task),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({
+      taskId,
+      ...payload
+    }: {
+      taskId: string;
+      dueDate?: string;
+      labelIds?: string[];
+    }) => updateTask(params.projectId, taskId, payload),
     onSuccess: (task) => upsertTask(task),
   });
 
@@ -175,16 +194,20 @@ export default function ProjectBoardPage() {
   }
 
   return (
-    <main className="flex h-screen flex-col bg-base">
-      <header className="flex items-center gap-3 border-b border-border px-8 py-4">
-        <Link href={`/org/${params.orgId}`} className="text-sm text-muted hover:text-ink">
+    <main className="relative flex h-screen flex-col">
+      <MeshBackground />
+      <header className="relative z-10 flex items-center gap-3 border-b border-border px-6 py-4 sm:px-8">
+        <Link href={`/org/${params.orgId}`} className="text-sm font-medium text-muted hover:text-ink">
           ← {activeOrganization?.name}
         </Link>
         <span className="text-muted">/</span>
-        <h1 className="font-display font-semibold text-ink">{project?.name}</h1>
+        <h1 className="font-display font-bold text-ink">{project?.name}</h1>
+        <div className="ml-auto">
+          <ThemeToggle />
+        </div>
       </header>
 
-      <div className="flex flex-1 gap-4 overflow-x-auto p-8">
+      <div className="relative z-10 flex flex-1 gap-4 overflow-x-auto p-6 sm:p-8">
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           {project?.columns.map((column, idx) => (
             <BoardColumn
@@ -195,14 +218,25 @@ export default function ProjectBoardPage() {
               justUpdated={recentlyUpdatedColumn === column.id}
               onCreateTask={(columnId, title) => createMutation.mutate({ columnId, title })}
               onDeleteTask={(taskId) => deleteMutation.mutate(taskId)}
+              onOpenTask={(task) => setOpenTask(task)}
             />
           ))}
 
           <DragOverlay>
-            {activeTask ? <TaskCard task={activeTask} onDelete={() => {}} /> : null}
+            {activeTask ? (
+              <TaskCard task={activeTask} onDelete={() => {}} onOpen={() => {}} />
+            ) : null}
           </DragOverlay>
         </DndContext>
       </div>
+
+      {openTask && (
+        <TaskDetailModal
+          task={openTask}
+          onClose={() => setOpenTask(null)}
+          onSave={(updates) => updateMutation.mutate({ taskId: openTask.id, ...updates })}
+        />
+      )}
     </main>
   );
 }

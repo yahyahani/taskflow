@@ -1,113 +1,202 @@
-# TaskFlow
+# <img src="apps/web/public/logo-icon.svg" width="28" align="center" alt=""> TaskFlow
 
-A multi-tenant project management tool — think a lightweight Trello/Asana clone, built to demonstrate a production-style SaaS architecture rather than to compete with either.
+![TaskFlow](./screenshot.png)
 
-Teams (organizations) get their own boards, projects, and tasks, fully isolated from every other team in the same database. Moving a card updates everyone's screen in real time, no refresh required.
+A multi-tenant project management tool — a lightweight Trello-style Kanban board built to demonstrate
+a production-grade SaaS architecture. Every organization runs in its own isolated workspace; drag a
+card and every teammate's screen updates in real time.
 
-## Why this project exists
+Built as a portfolio project to showcase full-stack TypeScript, WebSocket-driven UI sync, and
+layered security in a monorepo setup.
 
-This is a portfolio project. The goal wasn't to build the most features — it was to build a smaller set of features *correctly*: real auth (not a tutorial's `if (password === "admin")`), real tenant isolation that's actually enforced server-side, and real-time sync that's broadcast-scoped so one tenant's updates never leak into another's browser tab.
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend framework | NestJS 10 |
+| ORM | Prisma 5 |
+| Database | PostgreSQL 16 |
+| Auth | JWT (access + refresh) · Passport |
+| Real-time | Socket.io 4 |
+| Frontend framework | Next.js 14 (App Router) |
+| Data fetching | TanStack React Query |
+| Client state | Zustand |
+| Drag and drop | @dnd-kit |
+| Styling | Tailwind CSS |
+| Containerization | Docker · Docker Compose |
+| CI | GitHub Actions |
+
+---
+
+## Features
+
+- **Multi-tenant auth** — JWT access tokens (15 min) with rotating refresh tokens (30 days, hashed
+  at rest). Presenting a refresh token immediately invalidates it and issues a fresh one; replaying a
+  revoked token is treated as a theft signal.
+- **Real-time Kanban board** — drag-and-drop columns and cards via `@dnd-kit`. Moves are broadcast
+  instantly over Socket.io to every connected teammate in the same organization — and only that
+  organization.
+- **Labels** — create color-coded labels scoped to your organization and attach them to any task
+  across all your projects.
+- **Light / dark theme** — follows the system default with a manual toggle, persisted per user.
+- **Docker support** — a single `docker compose up --build` starts Postgres, the API, and the web
+  app; migrations run automatically on container start.
+
+---
 
 ## Architecture
 
 ```
 taskflow/
 ├── apps/
-│   ├── api/          NestJS backend (REST + WebSocket)
-│   └── web/           Next.js frontend (App Router)
-├── docker-compose.yml  Local Postgres
-└── package.json        npm workspaces root
+│   ├── api/       NestJS REST + WebSocket API
+│   │   ├── src/
+│   │   │   ├── auth/
+│   │   │   ├── organizations/
+│   │   │   ├── projects/
+│   │   │   ├── tasks/
+│   │   │   ├── labels/
+│   │   │   ├── common/guards/   ← TenantGuard · RolesGuard
+│   │   │   └── websockets/
+│   │   └── prisma/
+│   └── web/       Next.js 14 frontend
+│       └── src/
+│           ├── app/
+│           ├── components/
+│           ├── lib/
+│           └── store/
+├── docker-compose.yml
+└── package.json   (npm workspaces root)
 ```
 
-**Backend — NestJS + Prisma + PostgreSQL**
+### Tenant isolation
 
-- **Auth**: JWT access tokens (15 min) + rotating refresh tokens (30 days, hashed at rest, single-use). Passwords hashed with bcrypt.
-- **Multi-tenancy**: shared database, shared schema. Every tenant-scoped table carries an `organizationId`. A `TenantGuard` reads the `x-organization-id` header, verifies the caller actually has a `Membership` row for that org, and attaches the verified tenant context to the request — every query downstream reads from that verified context, never from a client-supplied ID in the body.
-- **Authorization**: a `RolesGuard` + `@Roles()` decorator restrict specific actions (e.g. deleting a project) to `OWNER`/`ADMIN`.
-- **Real-time**: a Socket.io gateway puts each connected client into a room scoped to their active organization. Task moves, creates, updates, and deletes are broadcast only to that room.
+Every HTTP request passes through two guards before reaching a service method:
 
-**Frontend — Next.js (App Router) + React Query + Zustand**
+1. **`TenantGuard`** — extracts the `orgId` from the route, verifies the authenticated user holds an
+   active membership in that organization, and injects the membership into the request context.
+   A route that is missing the guard cannot accidentally expose another tenant's data.
 
-- Drag-and-drop Kanban board (`@dnd-kit`) with optimistic updates
-- React Query as the source of truth for server data; WebSocket events merge directly into its cache so the UI updates the same way whether a change came from this tab, another tab, or a teammate
-- Zustand for session/auth state, persisted to `localStorage`
+2. **`RolesGuard`** — checks the membership's `Role` (`OWNER` / `ADMIN` / `MEMBER`) against the
+   `@Roles()` decorator on the handler. Destructive operations (deleting projects, managing members)
+   are restricted to `OWNER` and `ADMIN`.
 
-## Data model
+Cross-tenant lookups return `404 Not Found` rather than `403 Forbidden` to avoid confirming that a
+given resource ID exists at all.
 
+WebSocket events are broadcast into per-organization Socket.io rooms, so real-time updates never
+cross tenant boundaries.
+
+---
+
+## Setup
+
+### With Docker
+
+The fastest way to run the full stack.
+
+**1. Configure secrets**
+
+Create a `.env` file in the repo root:
+
+```env
+JWT_SECRET=change-this-to-a-long-random-string-in-production
+WEB_ORIGIN=http://localhost:3001
+NEXT_PUBLIC_API_URL=http://localhost:4000
 ```
-User ──< Membership >── Organization
-                            │
-                            └──< Project ──< BoardColumn ──< Task >── User (assignee)
-                                                                │
-                                                                ├──< Comment
-                                                                └──< Activity
-```
 
-A `Membership` is the join row between a user and an organization, carrying that user's role (`OWNER` / `ADMIN` / `MEMBER`) *for that organization* — the same person can be an owner of one workspace and a regular member of another.
+**2. Build and start**
 
-## Getting started
-
-### Prerequisites
-- Node.js 20+
-- Docker (for local Postgres) — or your own Postgres instance
-
-### 1. Install dependencies
 ```bash
+docker compose up --build
+```
+
+| Service  | URL                    |
+|----------|------------------------|
+| Web      | http://localhost:3001  |
+| API      | http://localhost:4000  |
+| Postgres | localhost:5432         |
+
+Database migrations run automatically when the API container starts.
+
+```bash
+# Run in the background
+docker compose up --build -d
+
+# Follow API logs
+docker compose logs -f api
+
+# Stop everything
+docker compose down
+
+# Stop and wipe the database volume
+docker compose down -v
+```
+
+---
+
+### Local Development
+
+**Prerequisites:** Node.js 20+, Docker (for Postgres)
+
+**1. Install dependencies**
+
+```bash
+git clone https://github.com/your-username/taskflow.git
+cd taskflow
 npm install
 ```
 
-### 2. Start the database
+**2. Start Postgres**
+
 ```bash
-docker compose up -d
+docker compose up -d postgres
 ```
 
-### 3. Configure environment variables
+**3. Configure environment variables**
+
 ```bash
 cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env
 ```
-Edit `apps/api/.env` and set a real `JWT_SECRET` (any long random string works for local dev).
 
-### 4. Run the database migration
+The defaults work for local dev. Set a strong `JWT_SECRET` before exposing the API publicly.
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/taskflow?schema=public"
+JWT_SECRET="change-this-to-a-long-random-string-in-production"
+WEB_ORIGIN="http://localhost:3001"
+PORT=4000
+```
+
+**4. Run migrations**
+
 ```bash
-cd apps/api
-npx prisma migrate dev --name init
+cd apps/api && npx prisma migrate dev
 ```
 
-### 5. Start both apps
-From the repo root, in two terminals:
+**5. Start both apps**
+
+Run each in a separate terminal from the repo root:
+
 ```bash
-npm run dev:api   # http://localhost:4000
-npm run dev:web   # http://localhost:3000
+npm run dev:api   # → http://localhost:4000
+npm run dev:web   # → http://localhost:3001
 ```
 
-Open `http://localhost:3000`, register an account (this also creates your first organization), and create a board.
+Open `http://localhost:3001`, register an account (this also creates your first organization), and
+start building boards.
 
-## Notable implementation details
+---
 
-- **Tenant isolation has two layers**: the `TenantGuard` blocks requests without a verified membership, and every service method *also* re-checks that the resource being mutated belongs to the caller's organization before touching it. Belt and suspenders — a guard misconfiguration on one route shouldn't be enough to leak data.
-- **Refresh tokens rotate on every use**: presenting a refresh token immediately revokes it and issues a new one. A revoked token being replayed is a signal worth treating as token theft in a production system.
-- **404 over 403 for cross-tenant lookups**: requesting a resource that exists but belongs to another organization returns `404 Not Found`, not `403 Forbidden` — this avoids confirming to an attacker that a given ID exists at all.
+## CI
 
-## Possible next steps
+GitHub Actions runs on every push and pull request to `main`.
 
-- Project invitations (invite a teammate by email into an existing org)
-- File attachments on tasks
-- Tests (Jest for the API's guards/services, Playwright for the board's drag-and-drop flow)
-- CI pipeline (GitHub Actions: lint, type-check, test on every PR)
-- Deploy: API → Railway/Render, Web → Vercel
+| Job | Steps |
+|-----|-------|
+| **API** | lint → type-check → unit tests → build (against a real Postgres service container) |
+| **Web** | lint → type-check → build |
 
-## Tech stack
-
-| Layer | Choice |
-|---|---|
-| Backend framework | NestJS |
-| ORM | Prisma |
-| Database | PostgreSQL |
-| Auth | JWT + Passport |
-| Real-time | Socket.io |
-| Frontend framework | Next.js (App Router) |
-| Data fetching | React Query |
-| Client state | Zustand |
-| Drag and drop | @dnd-kit |
-| Styling | Tailwind CSS |
+See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).

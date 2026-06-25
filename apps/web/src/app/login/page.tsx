@@ -1,20 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { loginRequest } from '@/lib/auth-api';
 import { useAuthStore } from '@/store/auth.store';
+import { useThemeStore } from '@/store/theme.store';
+import { MeshBackground } from '@/components/MeshBackground';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { Logo } from '@/components/Logo';
 import { AxiosError } from 'axios';
 
 export default function LoginPage() {
   const router = useRouter();
   const setSession = useAuthStore((s) => s.setSession);
+  const hydrateTheme = useThemeStore((s) => s.hydrate);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    hydrateTheme();
+  }, [hydrateTheme]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,91 +45,97 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen grid-cols-1 bg-base md:grid-cols-2">
-      {/* Left: brand panel — the signature element lives here */}
-      <div className="relative hidden flex-col justify-between overflow-hidden border-r border-border bg-panel p-10 md:flex">
-        <div className="font-display text-lg font-semibold tracking-tight text-ink">
-          TaskFlow
-        </div>
+    <main className="relative grid min-h-screen grid-cols-1 lg:grid-cols-2">
+      <MeshBackground />
+
+      <div className="absolute right-6 top-6 z-10">
+        <ThemeToggle />
+      </div>
+
+      {/* Left: brand panel */}
+      <div className="relative z-10 hidden flex-col justify-between p-12 lg:flex">
+        <Link href="/" className="inline-flex">
+          <Logo size={26} textClassName="text-lg" />
+        </Link>
 
         <div className="space-y-6">
-          <p className="font-display text-3xl leading-tight text-ink">
-            Boards that move<br />as fast as your team.
+          <p className="font-display text-4xl font-extrabold leading-tight text-ink">
+            Boards that{' '}
+            <span className="bg-gradient-to-r from-violet via-sky to-coral bg-clip-text text-transparent">
+              move with your team
+            </span>
           </p>
-          <div className="flex gap-2 font-mono text-xs text-muted">
-            <span className="rounded border border-border px-2 py-1 text-status-todo">TODO</span>
-            <span className="rounded border border-border px-2 py-1 text-status-progress">
-              IN PROGRESS
-            </span>
-            <span className="rounded border border-border px-2 py-1 text-status-review">
-              IN REVIEW
-            </span>
-            <span className="rounded border border-border px-2 py-1 text-status-done">DONE</span>
+          <div className="flex flex-wrap gap-2 text-sm font-medium">
+            <span className="rounded-full bg-violet-soft px-3 py-1 text-violet">To Do</span>
+            <span className="rounded-full bg-amber-soft px-3 py-1 text-amber">In Progress</span>
+            <span className="rounded-full bg-sky-soft px-3 py-1 text-sky">In Review</span>
+            <span className="rounded-full bg-mint-soft px-3 py-1 text-mint">Done</span>
           </div>
         </div>
 
-        <p className="font-mono text-xs text-muted">Real-time boards for small teams.</p>
+        <p className="text-sm text-muted">Real-time boards for small teams.</p>
       </div>
 
       {/* Right: form */}
-      <div className="flex items-center justify-center p-8">
-        <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-5">
-          <div className="mb-2 font-display text-lg font-semibold text-ink md:hidden">
-            TaskFlow
-          </div>
-          <div>
-            <h1 className="font-display text-2xl font-semibold text-ink">Sign in</h1>
-            <p className="mt-1 text-sm text-muted">
-              No account?{' '}
-              <Link href="/register" className="text-accent hover:underline">
-                Create one
-              </Link>
-            </p>
+      <div className="relative z-10 flex items-center justify-center p-6">
+        <form onSubmit={handleSubmit} className="glass w-full max-w-sm rounded-3xl p-8 shadow-card-hover">
+          <div className="mb-6 lg:hidden">
+            <Logo size={24} textClassName="text-lg" />
           </div>
 
-          <div className="space-y-1.5">
-            <label htmlFor="email" className="text-sm font-medium text-ink">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-border bg-panel px-3 py-2 text-ink placeholder:text-muted focus:border-accent"
-              placeholder="you@company.com"
-            />
+          <h1 className="font-display text-2xl font-bold text-ink">Welcome back</h1>
+          <p className="mt-1 text-sm text-muted">
+            No account?{' '}
+            <Link href="/register" className="font-medium text-violet hover:underline">
+              Create one
+            </Link>
+          </p>
+
+          <div className="mt-6 space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="email" className="text-sm font-medium text-ink">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-ink placeholder:text-muted focus:border-violet"
+                placeholder="you@company.com"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="text-sm font-medium text-ink">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-ink placeholder:text-muted focus:border-violet"
+                placeholder="••••••••"
+              />
+            </div>
+
+            {error && (
+              <p role="alert" className="rounded-xl border border-amber/30 bg-amber-soft px-3 py-2 text-sm text-amber">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-xl bg-violet px-3 py-2.5 font-semibold text-white shadow-glow transition-transform hover:scale-[1.01] disabled:opacity-60"
+            >
+              {loading ? 'Signing in…' : 'Sign in'}
+            </button>
           </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="password" className="text-sm font-medium text-ink">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-md border border-border bg-panel px-3 py-2 text-ink placeholder:text-muted focus:border-accent"
-              placeholder="••••••••"
-            />
-          </div>
-
-          {error && (
-            <p role="alert" className="rounded-md border border-status-progress/30 bg-status-progress/10 px-3 py-2 text-sm text-status-progress">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-accent px-3 py-2 font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-60"
-          >
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
         </form>
       </div>
     </main>

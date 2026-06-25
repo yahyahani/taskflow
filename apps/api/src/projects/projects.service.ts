@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateProjectDto, UpdateProjectDto } from './dto/project.dto';
 
@@ -65,7 +65,7 @@ export class ProjectsService {
       throw new NotFoundException('Project not found');
     }
     if (project.organizationId !== organizationId) {
-      throw new ForbiddenException('This project does not belong to your organization');
+      throw new NotFoundException('Project not found');
     }
   }
 }

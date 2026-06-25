@@ -10,6 +10,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { PrismaService } from '../common/prisma/prisma.service';
 import { JwtPayload } from '../common/types/auth.types';
 
 /**
@@ -19,7 +20,7 @@ import { JwtPayload } from '../common/types/auth.types';
  * that socket is the same physical browser tab switching tenants.
  */
 @WebSocketGateway({
-  cors: { origin: process.env.WEB_ORIGIN ?? 'http://localhost:3000', credentials: true },
+  cors: { origin: process.env['WEB_ORIGIN'] ?? 'http://localhost:3000', credentials: true },
   namespace: 'board',
 })
 export class BoardGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -28,7 +29,10 @@ export class BoardGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(BoardGateway.name);
 
-  constructor(private readonly jwt: JwtService) {}
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   handleConnection(client: Socket) {
     try {
@@ -37,10 +41,10 @@ export class BoardGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.disconnect();
         return;
       }
-      // Verify the access token so only authenticated users can open a
-      // socket at all. Per-org room membership is still explicit via
-      // the 'join-organization' message below.
-      this.jwt.verify<JwtPayload>(token);
+      // Verify the access token and store the userId so join-organization
+      // can check real membership before admitting the client to a room.
+      const payload = this.jwt.verify<JwtPayload>(token);
+      client.data.userId = payload.sub;
     } catch {
       client.disconnect();
     }
@@ -51,16 +55,22 @@ export class BoardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('join-organization')
-  handleJoinOrganization(
+  async handleJoinOrganization(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { organizationId: string },
   ) {
-    // Note: we trust organizationId here only to join a *room*, not to
-    // read data — actual data access is still checked by TenantGuard on
-    // the HTTP side. Room membership only determines which broadcasts a
-    // socket receives, which is not sensitive on its own. For stricter
-    // guarantees you'd re-verify membership via Prisma here too.
-    void client.join(`org:${data.organizationId}`);
+    const { organizationId } = data;
+    // Verify the authenticated user has a membership row for this org before
+    // joining the room. Without this check any valid JWT could subscribe to
+    // any org's real-time events by sending an arbitrary organizationId.
+    const membership = await this.prisma.membership.findFirst({
+      where: { userId: client.data.userId as string, organizationId },
+    });
+    if (!membership) {
+      client.emit('error', { message: 'Access denied' });
+      return;
+    }
+    void client.join(`org:${organizationId}`);
   }
 
   emitTaskMoved(organizationId: string, payload: unknown) {

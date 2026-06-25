@@ -1,3 +1,5 @@
+import type { Request } from 'express';
+
 // Shape of the JWT access-token payload. `organizationId` is intentionally
 // NOT included here — a user can belong to multiple orgs, so the active
 // org is resolved per-request from the `x-organization-id` header and

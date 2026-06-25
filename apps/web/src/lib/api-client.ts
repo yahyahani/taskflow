@@ -3,7 +3,7 @@ import { useAuthStore } from '@/store/auth.store';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
-export const api = axios.create({ baseURL: API_URL });
+export const api = axios.create({ baseURL: API_URL, withCredentials: true });
 
 // Attach access token + active organization header to every request.
 api.interceptors.request.use((config) => {
@@ -21,7 +21,8 @@ let refreshPromise: Promise<string> | null = null;
 
 // On a 401, attempt exactly one silent refresh-and-retry per request.
 // Concurrent 401s share the same in-flight refresh call instead of each
-// firing their own /auth/refresh request.
+// firing their own /auth/refresh request. The refresh token travels as an
+// httpOnly cookie — no need to read it from the store.
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -32,19 +33,16 @@ api.interceptors.response.use(
     }
     original._retried = true;
 
-    const { refreshToken, setAccessToken, clear } = useAuthStore.getState();
-    if (!refreshToken) {
-      clear();
-      throw error;
-    }
+    const { setAccessToken, clear } = useAuthStore.getState();
 
     try {
       if (!refreshPromise) {
         refreshPromise = axios
-          .post(`${API_URL}/auth/refresh`, { refreshToken })
+          .post(`${API_URL}/auth/refresh`, {}, { withCredentials: true })
           .then((res) => {
-            setAccessToken(res.data.accessToken);
-            return res.data.accessToken as string;
+            const token = res.data.accessToken as string;
+            setAccessToken(token);
+            return token;
           })
           .finally(() => {
             refreshPromise = null;

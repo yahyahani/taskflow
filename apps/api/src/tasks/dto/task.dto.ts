@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsInt, IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
 
 export enum TaskStatusDto {
   TODO = 'TODO',
@@ -26,6 +26,11 @@ export class CreateTaskDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  labelIds?: string[];
 }
 
 export class UpdateTaskDto {
@@ -43,8 +48,14 @@ export class UpdateTaskDto {
   assigneeId?: string;
 
   @IsOptional()
+  @ValidateIf((o: UpdateTaskDto) => o.dueDate !== null)
   @IsDateString()
-  dueDate?: string;
+  dueDate?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  labelIds?: string[];
 }
 
 // Used specifically for drag-and-drop: move a task to a (possibly new)

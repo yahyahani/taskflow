@@ -1,7 +1,14 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { BoardGateway } from '../websockets/board.gateway';
 import { CreateTaskDto, MoveTaskDto, UpdateTaskDto } from './dto/task.dto';
+
+// Shared include shape so every response (list, create, update, move)
+// returns the same fully-hydrated task — assignee and labels included.
+const TASK_INCLUDE = {
+  assignee: { select: { id: true, name: true, email: true } },
+  labels: { include: { label: true } },
+} as const;
 
 @Injectable()
 export class TasksService {
@@ -10,19 +17,32 @@ export class TasksService {
     private readonly boardGateway: BoardGateway,
   ) {}
 
-  findAllForProject(organizationId: string, projectId: string) {
-    return this.prisma.task.findMany({
+  async findAllForProject(organizationId: string, projectId: string) {
+    const tasks = await this.prisma.task.findMany({
       where: { projectId, project: { organizationId } },
-      include: { assignee: { select: { id: true, name: true, email: true } } },
+      include: TASK_INCLUDE,
       orderBy: { position: 'asc' },
     });
+    return tasks.map(this.flattenLabels);
   }
 
   async create(organizationId: string, projectId: string, userId: string, dto: CreateTaskDto) {
     await this.assertProjectInOrg(organizationId, projectId);
 
+    // Verify the column belongs to this project so a client can't mix column
+    // and project IDs from different projects within the same org.
+    const column = await this.prisma.boardColumn.findFirst({
+      where: { id: dto.columnId, projectId },
+    });
+    if (!column) throw new NotFoundException('Column not found in this project');
+
+    // Scope the position query to this org so cross-tenant columnId probes
+    // cannot influence position numbering.
     const lastTask = await this.prisma.task.findFirst({
-      where: { columnId: dto.columnId },
+      where: {
+        columnId: dto.columnId,
+        column: { project: { organizationId } },
+      },
       orderBy: { position: 'desc' },
     });
 
@@ -35,32 +55,49 @@ export class TasksService {
         assigneeId: dto.assigneeId,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         position: (lastTask?.position ?? -1) + 1,
+        labels: dto.labelIds?.length
+          ? { create: dto.labelIds.map((labelId) => ({ labelId })) }
+          : undefined,
         activities: {
           create: { type: 'TASK_CREATED', userId },
         },
       },
-      include: { assignee: { select: { id: true, name: true, email: true } } },
+      include: TASK_INCLUDE,
     });
 
-    this.boardGateway.emitTaskCreated(organizationId, task);
-    return task;
+    const flattened = this.flattenLabels(task);
+    this.boardGateway.emitTaskCreated(organizationId, flattened);
+    return flattened;
   }
 
   async update(organizationId: string, taskId: string, userId: string, dto: UpdateTaskDto) {
     await this.assertTaskInOrg(organizationId, taskId);
+    const { labelIds, dueDate, ...rest } = dto;
 
     const task = await this.prisma.task.update({
       where: { id: taskId },
       data: {
-        ...dto,
-        dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+        ...rest,
+        // Support explicit null to clear the date; undefined means "don't touch".
+        ...(dueDate !== undefined && {
+          dueDate: dueDate === null ? null : new Date(dueDate),
+        }),
+        // Replace the label set entirely when labelIds is provided —
+        // simplest semantics for a "save these labels" UI action.
+        labels: labelIds
+          ? {
+              deleteMany: {},
+              create: labelIds.map((labelId) => ({ labelId })),
+            }
+          : undefined,
         activities: { create: { type: 'TASK_UPDATED', userId } },
       },
-      include: { assignee: { select: { id: true, name: true, email: true } } },
+      include: TASK_INCLUDE,
     });
 
-    this.boardGateway.emitTaskUpdated(organizationId, task);
-    return task;
+    const flattened = this.flattenLabels(task);
+    this.boardGateway.emitTaskUpdated(organizationId, flattened);
+    return flattened;
   }
 
   /**
@@ -81,16 +118,20 @@ export class TasksService {
           create: { type: 'TASK_MOVED', userId, metadata: { columnId: dto.columnId } },
         },
       },
-      include: { assignee: { select: { id: true, name: true, email: true } } },
+      include: TASK_INCLUDE,
     });
 
-    this.boardGateway.emitTaskMoved(organizationId, task);
-    return task;
+    const flattened = this.flattenLabels(task);
+    this.boardGateway.emitTaskMoved(organizationId, flattened);
+    return flattened;
   }
 
   async remove(organizationId: string, taskId: string) {
-    await this.assertTaskInOrg(organizationId, taskId);
-    await this.prisma.task.delete({ where: { id: taskId } });
+    // deleteMany lets us check org membership and delete in one query.
+    const deleted = await this.prisma.task.deleteMany({
+      where: { id: taskId, project: { organizationId } },
+    });
+    if (deleted.count === 0) throw new NotFoundException('Task not found');
     this.boardGateway.emitTaskDeleted(organizationId, { id: taskId });
     return { success: true };
   }
@@ -107,11 +148,20 @@ export class TasksService {
       where: { id: taskId },
       include: { project: true },
     });
-    if (!task) {
+    // Return 404 in both cases — "not found" and "belongs to another org" —
+    // to avoid leaking whether the ID exists at all (consistent with the
+    // same principle applied throughout the rest of the API).
+    if (!task || task.project.organizationId !== organizationId) {
       throw new NotFoundException('Task not found');
     }
-    if (task.project.organizationId !== organizationId) {
-      throw new ForbiddenException('This task does not belong to your organization');
-    }
+  }
+
+  // Prisma returns labels as a join-table array (`{ label: {...} }[]`) —
+  // flatten that into a plain `Label[]` so the frontend doesn't need to
+  // know about the join table shape.
+  private flattenLabels<T extends { labels: { label: unknown }[] }>(
+    task: T,
+  ): Omit<T, 'labels'> & { labels: unknown[] } {
+    return { ...task, labels: task.labels.map((l) => l.label) };
   }
 }

@@ -1,16 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AxiosError } from 'axios';
 import { registerRequest } from '@/lib/auth-api';
 import { useAuthStore } from '@/store/auth.store';
+import { useThemeStore } from '@/store/theme.store';
+import { MeshBackground } from '@/components/MeshBackground';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { Logo } from '@/components/Logo';
 
 export default function RegisterPage() {
   const router = useRouter();
   const setSession = useAuthStore((s) => s.setSession);
   const setActiveOrganization = useAuthStore((s) => s.setActiveOrganization);
+  const hydrateTheme = useThemeStore((s) => s.hydrate);
 
   const [form, setForm] = useState({
     name: '',
@@ -20,6 +25,10 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    hydrateTheme();
+  }, [hydrateTheme]);
 
   function update(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -49,60 +58,68 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-base p-8">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-5">
-        <div>
-          <div className="mb-2 font-display text-lg font-semibold text-ink">TaskFlow</div>
-          <h1 className="font-display text-2xl font-semibold text-ink">Create your account</h1>
-          <p className="mt-1 text-sm text-muted">
-            Already have one?{' '}
-            <Link href="/login" className="text-accent hover:underline">
-              Sign in
-            </Link>
-          </p>
-        </div>
+    <main className="relative flex min-h-screen items-center justify-center p-6">
+      <MeshBackground />
 
-        <Field label="Your name" id="name" value={form.name} onChange={update('name')} placeholder="Sam Rivera" />
-        <Field
-          label="Work email"
-          id="email"
-          type="email"
-          value={form.email}
-          onChange={update('email')}
-          placeholder="you@company.com"
-        />
-        <Field
-          label="Password"
-          id="password"
-          type="password"
-          value={form.password}
-          onChange={update('password')}
-          placeholder="At least 8 characters"
-        />
-        <Field
-          label="Organization name"
-          id="organizationName"
-          value={form.organizationName}
-          onChange={update('organizationName')}
-          placeholder="Acme Inc"
-        />
+      <div className="absolute right-6 top-6 z-10">
+        <ThemeToggle />
+      </div>
 
-        {error && (
-          <p
-            role="alert"
-            className="rounded-md border border-status-progress/30 bg-status-progress/10 px-3 py-2 text-sm text-status-progress"
+      <form onSubmit={handleSubmit} className="glass relative z-10 w-full max-w-sm rounded-3xl p-8 shadow-card-hover">
+        <Link href="/" className="inline-flex">
+          <Logo size={26} textClassName="text-lg" />
+        </Link>
+        <h1 className="mt-4 font-display text-2xl font-bold text-ink">Create your account</h1>
+        <p className="mt-1 text-sm text-muted">
+          Already have one?{' '}
+          <Link href="/login" className="font-medium text-violet hover:underline">
+            Sign in
+          </Link>
+        </p>
+
+        <div className="mt-6 space-y-4">
+          <Field label="Your name" id="name" value={form.name} onChange={update('name')} placeholder="Sam Rivera" />
+          <Field
+            label="Work email"
+            id="email"
+            type="email"
+            value={form.email}
+            onChange={update('email')}
+            placeholder="you@company.com"
+          />
+          <Field
+            label="Password"
+            id="password"
+            type="password"
+            value={form.password}
+            onChange={update('password')}
+            placeholder="At least 8 characters"
+          />
+          <Field
+            label="Organization name"
+            id="organizationName"
+            value={form.organizationName}
+            onChange={update('organizationName')}
+            placeholder="Acme Inc"
+          />
+
+          {error && (
+            <p
+              role="alert"
+              className="rounded-xl border border-amber/30 bg-amber-soft px-3 py-2 text-sm text-amber"
+            >
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-xl bg-violet px-3 py-2.5 font-semibold text-white shadow-glow transition-transform hover:scale-[1.01] disabled:opacity-60"
           >
-            {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md bg-accent px-3 py-2 font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-60"
-        >
-          {loading ? 'Creating account…' : 'Create account'}
-        </button>
+            {loading ? 'Creating account…' : 'Create account'}
+          </button>
+        </div>
       </form>
     </main>
   );
@@ -136,7 +153,7 @@ function Field({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="w-full rounded-md border border-border bg-panel px-3 py-2 text-ink placeholder:text-muted focus:border-accent"
+        className="w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-ink placeholder:text-muted focus:border-violet"
       />
     </div>
   );

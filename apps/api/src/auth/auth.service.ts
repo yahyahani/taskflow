@@ -4,7 +4,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -34,24 +36,35 @@ export class AuthService {
     // Create the user, their organization, and the OWNER membership that
     // links them together — all in one transaction so we never end up
     // with a user who has no organization (or vice versa).
-    const { user, organization } = await this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: { email: dto.email, passwordHash, name: dto.name },
-      });
+    let user: { id: string; email: string; name: string };
+    let organization: { id: string; name: string; slug: string };
+    try {
+      ({ user, organization } = await this.prisma.$transaction(
+        async (tx: Prisma.TransactionClient) => {
+          const createdUser = await tx.user.create({
+            data: { email: dto.email, passwordHash, name: dto.name },
+          });
 
-      const organization = await tx.organization.create({
-        data: { name: dto.organizationName, slug },
-      });
+          const createdOrg = await tx.organization.create({
+            data: { name: dto.organizationName, slug },
+          });
 
-      await tx.membership.create({
-        data: { userId: user.id, organizationId: organization.id, role: 'OWNER' },
-      });
+          await tx.membership.create({
+            data: { userId: createdUser.id, organizationId: createdOrg.id, role: 'OWNER' },
+          });
 
-      return { user, organization };
-    });
+          return { user: createdUser, organization: createdOrg };
+        },
+      ));
+    } catch (e) {
+      if (e instanceof PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException('An account with this email already exists');
+      }
+      throw e;
+    }
 
-    const tokens = await this.issueTokens(user.id, user.email);
-    return { user: this.toPublicUser(user), organization, ...tokens };
+    const { accessToken, refreshToken } = await this.issueTokens(user.id, user.email);
+    return { user: this.toPublicUser(user), organization, accessToken, refreshToken };
   }
 
   async login(dto: LoginDto) {
@@ -65,8 +78,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokens = await this.issueTokens(user.id, user.email);
-    return { user: this.toPublicUser(user), ...tokens };
+    const { accessToken, refreshToken } = await this.issueTokens(user.id, user.email);
+    return { user: this.toPublicUser(user), accessToken, refreshToken };
   }
 
   /**
@@ -92,8 +105,8 @@ export class AuthService {
       data: { revoked: true },
     });
 
-    const tokens = await this.issueTokens(stored.user.id, stored.user.email);
-    return { user: this.toPublicUser(stored.user), ...tokens };
+    const { accessToken, refreshToken: newRefreshToken } = await this.issueTokens(stored.user.id, stored.user.email);
+    return { user: this.toPublicUser(stored.user), accessToken, refreshToken: newRefreshToken };
   }
 
   async logout(refreshToken: string) {

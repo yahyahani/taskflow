@@ -4,13 +4,8 @@ import type { User, Organization } from '@/types';
 interface AuthState {
   user: User | null;
   accessToken: string | null;
-  refreshToken: string | null;
   activeOrganization: Organization | null;
-  setSession: (data: {
-    user: User;
-    accessToken: string;
-    refreshToken: string;
-  }) => void;
+  setSession: (data: { user: User; accessToken: string }) => void;
   setActiveOrganization: (org: Organization) => void;
   setAccessToken: (token: string) => void;
   clear: () => void;
@@ -22,54 +17,41 @@ const STORAGE_KEY = 'taskflow.session';
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   accessToken: null,
-  refreshToken: null,
   activeOrganization: null,
 
-  setSession: ({ user, accessToken, refreshToken }) => {
-    set({ user, accessToken, refreshToken });
-    persist({ user, accessToken, refreshToken });
+  setSession: ({ user, accessToken }) => {
+    set({ user, accessToken });
+    persist({ user, accessToken });
   },
 
   setActiveOrganization: (org) => {
     set((state) => {
-      persist({
-        user: state.user,
-        accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
-        activeOrganization: org,
-      });
+      persist({ user: state.user, accessToken: state.accessToken, activeOrganization: org });
       return { activeOrganization: org };
     });
   },
 
   setAccessToken: (token) => {
     set((state) => {
-      persist({
-        user: state.user,
-        accessToken: token,
-        refreshToken: state.refreshToken,
-        activeOrganization: state.activeOrganization,
-      });
+      persist({ user: state.user, accessToken: token, activeOrganization: state.activeOrganization });
       return { accessToken: token };
     });
   },
 
   clear: () => {
-    set({ user: null, accessToken: null, refreshToken: null, activeOrganization: null });
+    set({ user: null, accessToken: null, activeOrganization: null });
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(STORAGE_KEY);
     }
   },
 
   // Called once on app mount to restore session from localStorage.
-  // (Artifacts can't use localStorage, but this is a real Next.js app
-  // running in its own deployment, so browser storage is fine here.)
   hydrate: () => {
     if (typeof window === 'undefined') return;
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     try {
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(raw) as Partial<AuthState>;
       set(parsed);
     } catch {
       window.localStorage.removeItem(STORAGE_KEY);
