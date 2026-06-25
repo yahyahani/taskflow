@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { BoardGateway } from '../websockets/board.gateway';
 import { CreateProjectDto, UpdateProjectDto } from './dto/project.dto';
@@ -90,6 +90,55 @@ export class ProjectsService {
     const reordered = rest.map((col, idx) => ({ ...col, position: idx }));
     this.boardGateway.emitColumnReordered(organizationId, reordered);
     return reordered;
+  }
+
+  async addColumn(organizationId: string, projectId: string, name: string) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, organizationId },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    const last = await this.prisma.boardColumn.findFirst({
+      where: { projectId },
+      orderBy: { position: 'desc' },
+    });
+
+    return this.prisma.boardColumn.create({
+      data: { name, projectId, position: (last?.position ?? -1) + 1 },
+    });
+  }
+
+  async renameColumn(organizationId: string, projectId: string, columnId: string, name: string) {
+    const column = await this.prisma.boardColumn.findFirst({
+      where: { id: columnId, projectId, project: { organizationId } },
+    });
+    if (!column) throw new NotFoundException('Column not found');
+
+    return this.prisma.boardColumn.update({ where: { id: columnId }, data: { name } });
+  }
+
+  async removeColumn(organizationId: string, projectId: string, columnId: string) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, organizationId },
+      include: { columns: { orderBy: { position: 'asc' } } },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    const column = project.columns.find((c) => c.id === columnId);
+    if (!column) throw new NotFoundException('Column not found');
+
+    if (project.columns.length === 1) {
+      throw new BadRequestException('Cannot delete the last column');
+    }
+
+    const fallback = project.columns.find((c) => c.id !== columnId)!;
+
+    await this.prisma.$transaction([
+      this.prisma.task.updateMany({ where: { columnId }, data: { columnId: fallback.id } }),
+      this.prisma.boardColumn.delete({ where: { id: columnId } }),
+    ]);
+
+    return { success: true };
   }
 
   async getActivities(organizationId: string, projectId: string) {

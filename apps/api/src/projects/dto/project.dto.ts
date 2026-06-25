@@ -26,3 +26,15 @@ export class ReorderColumnDto {
   @Min(0)
   position: number;
 }
+
+export class CreateColumnDto {
+  @IsString()
+  @MinLength(1)
+  name: string;
+}
+
+export class RenameColumnDto {
+  @IsString()
+  @MinLength(1)
+  name: string;
+}

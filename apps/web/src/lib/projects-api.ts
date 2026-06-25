@@ -19,6 +19,27 @@ export async function createProject(payload: {
   return data;
 }
 
+export async function addColumn(projectId: string, name: string): Promise<BoardColumn> {
+  const { data } = await api.post<BoardColumn>(`/projects/${projectId}/columns`, { name });
+  return data;
+}
+
+export async function renameColumn(
+  projectId: string,
+  columnId: string,
+  name: string,
+): Promise<BoardColumn> {
+  const { data } = await api.patch<BoardColumn>(
+    `/projects/${projectId}/columns/${columnId}`,
+    { name },
+  );
+  return data;
+}
+
+export async function deleteColumn(projectId: string, columnId: string): Promise<void> {
+  await api.delete(`/projects/${projectId}/columns/${columnId}`);
+}
+
 export async function reorderColumn(
   projectId: string,
   columnId: string,

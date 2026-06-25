@@ -14,7 +14,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
-import { fetchProject, reorderColumn } from '@/lib/projects-api';
+import { addColumn, deleteColumn, fetchProject, renameColumn, reorderColumn } from '@/lib/projects-api';
 import { createTask, deleteTask, fetchTasks, moveTask, searchTasks, updateTask } from '@/lib/tasks-api';
 import { useAuthStore } from '@/store/auth.store';
 import { useThemeStore } from '@/store/theme.store';
@@ -187,6 +187,40 @@ export default function ProjectBoardPage() {
       reorderColumn(params.projectId, columnId, position),
   });
 
+  const addColumnMutation = useMutation({
+    mutationFn: (name: string) => addColumn(params.projectId, name),
+    onSuccess: (column) => {
+      queryClient.setQueryData<Project>(['project', params.projectId], (old) =>
+        old ? { ...old, columns: [...old.columns, column] } : old,
+      );
+    },
+  });
+
+  const renameColumnMutation = useMutation({
+    mutationFn: ({ columnId, name }: { columnId: string; name: string }) =>
+      renameColumn(params.projectId, columnId, name),
+    onSuccess: (column) => {
+      queryClient.setQueryData<Project>(['project', params.projectId], (old) =>
+        old ? { ...old, columns: old.columns.map((c) => (c.id === column.id ? column : c)) } : old,
+      );
+    },
+  });
+
+  const deleteColumnMutation = useMutation({
+    mutationFn: (columnId: string) => deleteColumn(params.projectId, columnId),
+    onSuccess: (_void, columnId) => {
+      queryClient.setQueryData<Project>(['project', params.projectId], (old) =>
+        old ? { ...old, columns: old.columns.filter((c) => c.id !== columnId) } : old,
+      );
+      queryClient.invalidateQueries({ queryKey: ['tasks', params.projectId] });
+    },
+  });
+
+  function handleDeleteColumn(columnId: string) {
+    if (!window.confirm('Delete this column? Tasks will be moved to the first column.')) return;
+    deleteColumnMutation.mutate(columnId);
+  }
+
   function handleDragStart(event: DragStartEvent) {
     if (event.active.data.current?.type === 'column') {
       const col = project?.columns.find((c) => c.id === event.active.id) ?? null;
@@ -327,9 +361,13 @@ export default function ProjectBoardPage() {
                 onCreateTask={(columnId, title) => createMutation.mutate({ columnId, title })}
                 onDeleteTask={(taskId) => deleteMutation.mutate(taskId)}
                 onOpenTask={(task) => setOpenTask(task)}
+                onRename={(columnId, name) => renameColumnMutation.mutate({ columnId, name })}
+                onDelete={handleDeleteColumn}
               />
             ))}
           </SortableContext>
+
+          <AddColumnButton onAdd={(name) => addColumnMutation.mutate(name)} />
 
           <DragOverlay>
             {activeColumn ? (
@@ -362,5 +400,58 @@ export default function ProjectBoardPage() {
         />
       )}
     </main>
+  );
+}
+
+function AddColumnButton({ onAdd }: { onAdd: (name: string) => void }) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+
+  function submit() {
+    if (name.trim()) onAdd(name.trim());
+    setName('');
+    setAdding(false);
+  }
+
+  if (adding) {
+    return (
+      <div className="glass flex w-64 shrink-0 flex-col gap-2 rounded-2xl p-3 shadow-card">
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit();
+            if (e.key === 'Escape') { setName(''); setAdding(false); }
+          }}
+          placeholder="Column name…"
+          className="w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-sm text-ink placeholder:text-muted focus:border-violet focus:outline-none"
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={submit}
+            disabled={!name.trim()}
+            className="flex-1 rounded-lg bg-violet py-1.5 text-sm font-semibold text-white shadow-glow disabled:opacity-40"
+          >
+            Add
+          </button>
+          <button
+            onClick={() => { setName(''); setAdding(false); }}
+            className="flex-1 rounded-lg border border-border py-1.5 text-sm font-medium text-muted hover:text-ink"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setAdding(true)}
+      className="glass flex h-12 w-64 shrink-0 items-center justify-center gap-2 rounded-2xl text-sm font-medium text-muted shadow-card transition-colors hover:text-ink"
+    >
+      + Add column
+    </button>
   );
 }
