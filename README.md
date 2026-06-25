@@ -44,6 +44,10 @@ layered security in a monorepo setup.
 - **Real-time Kanban board** — drag-and-drop task cards via `@dnd-kit`. Moves are broadcast
   instantly over Socket.io to every connected teammate in the same organization — and only that
   organization.
+- **Column management** — add new columns, rename them inline (click the pencil icon on the
+  column header), and delete them. Deleting a column atomically reassigns all its tasks to the
+  first remaining column; deleting the last column is blocked. All column mutations require
+  `OWNER` or `ADMIN` role.
 - **Column reordering** — board columns are themselves drag-and-drop sortable. Positions are
   persisted atomically in a single database transaction; the new order is broadcast over WebSocket so
   every connected client updates without a page refresh.
