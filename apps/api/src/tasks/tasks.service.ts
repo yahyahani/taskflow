@@ -73,6 +73,7 @@ export class TasksService {
         projectId,
         assigneeId: dto.assigneeId,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+        priority: dto.priority,
         position: (lastTask?.position ?? -1) + 1,
         labels: dto.labelIds?.length
           ? { create: dto.labelIds.map((labelId) => ({ labelId })) }

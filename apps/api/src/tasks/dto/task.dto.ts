@@ -7,6 +7,13 @@ export enum TaskStatusDto {
   DONE = 'DONE',
 }
 
+export enum PriorityDto {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  URGENT = 'URGENT',
+}
+
 export class CreateTaskDto {
   @IsString()
   @MinLength(1)
@@ -26,6 +33,10 @@ export class CreateTaskDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @IsOptional()
+  @IsEnum(PriorityDto)
+  priority?: PriorityDto;
 
   @IsOptional()
   @IsArray()
@@ -51,6 +62,10 @@ export class UpdateTaskDto {
   @ValidateIf((o: UpdateTaskDto) => o.dueDate !== null)
   @IsDateString()
   dueDate?: string | null;
+
+  @IsOptional()
+  @IsEnum(PriorityDto)
+  priority?: PriorityDto;
 
   @IsOptional()
   @IsArray()

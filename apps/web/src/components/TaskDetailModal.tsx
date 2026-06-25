@@ -5,7 +5,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createComment, deleteComment, fetchComments } from '@/lib/comments-api';
 import { useAuthStore } from '@/store/auth.store';
 import { LabelPicker } from './LabelPicker';
-import type { Comment, Task } from '@/types';
+import type { Comment, Priority, Task } from '@/types';
+
+const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
+  { value: 'LOW',    label: 'Low' },
+  { value: 'MEDIUM', label: 'Medium' },
+  { value: 'HIGH',   label: 'High' },
+  { value: 'URGENT', label: 'Urgent' },
+];
 
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -35,13 +42,14 @@ export function TaskDetailModal({
 }: {
   task: Task;
   onClose: () => void;
-  onSave: (updates: { dueDate?: string; labelIds?: string[] }) => void;
+  onSave: (updates: { dueDate?: string; priority?: Priority; labelIds?: string[] }) => void;
 }) {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
 
   const [labelIds, setLabelIds] = useState(task.labels.map((l) => l.id));
   const [dueDate, setDueDate] = useState(task.dueDate ? task.dueDate.slice(0, 10) : '');
+  const [priority, setPriority] = useState<Priority>(task.priority);
   const [body, setBody] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -77,7 +85,7 @@ export function TaskDetailModal({
   }
 
   function handleSave() {
-    onSave({ dueDate: dueDate || undefined, labelIds });
+    onSave({ dueDate: dueDate || undefined, priority, labelIds });
     onClose();
   }
 
@@ -113,17 +121,35 @@ export function TaskDetailModal({
               <LabelPicker selectedIds={labelIds} onToggle={toggleLabel} />
             </div>
 
-            <div>
-              <label htmlFor="due-date" className="mb-1.5 block text-sm font-medium text-ink">
-                Due date
-              </label>
-              <input
-                id="due-date"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-violet focus:outline-none"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="priority" className="mb-1.5 block text-sm font-medium text-ink">
+                  Priority
+                </label>
+                <select
+                  id="priority"
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value as Priority)}
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-violet focus:outline-none"
+                >
+                  {PRIORITY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="due-date" className="mb-1.5 block text-sm font-medium text-ink">
+                  Due date
+                </label>
+                <input
+                  id="due-date"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-violet focus:outline-none"
+                />
+              </div>
             </div>
           </div>
 

@@ -1,5 +1,6 @@
 export type Role = 'OWNER' | 'ADMIN' | 'MEMBER';
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
+export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
 export interface User {
   id: string;
@@ -53,6 +54,7 @@ export interface Task {
   title: string;
   description: string | null;
   status: TaskStatus;
+  priority: Priority;
   position: number;
   dueDate: string | null;
   columnId: string;

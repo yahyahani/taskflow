@@ -24,7 +24,7 @@ import { TaskCard } from '@/components/TaskCard';
 import { TaskDetailModal } from '@/components/TaskDetailModal';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { MeshBackground } from '@/components/MeshBackground';
-import type { BoardColumn as BoardColumnType, Project, Task, TaskStatus } from '@/types';
+import type { BoardColumn as BoardColumnType, Priority, Project, Task, TaskStatus } from '@/types';
 
 const STATUS_BY_COLUMN_NAME: Record<string, TaskStatus> = {
   'To Do': 'TODO',
@@ -149,6 +149,7 @@ export default function ProjectBoardPage() {
     }: {
       taskId: string;
       dueDate?: string;
+      priority?: Priority;
       labelIds?: string[];
     }) => updateTask(params.projectId, taskId, payload),
     onSuccess: (task) => upsertTask(task),

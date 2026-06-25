@@ -1,5 +1,5 @@
 import { api } from './api-client';
-import type { Task, TaskStatus } from '@/types';
+import type { Priority, Task, TaskStatus } from '@/types';
 
 export async function fetchTasks(projectId: string): Promise<Task[]> {
   const { data } = await api.get<Task[]>(`/projects/${projectId}/tasks`);
@@ -29,6 +29,7 @@ export async function updateTask(
     description?: string;
     assigneeId?: string;
     dueDate?: string;
+    priority?: Priority;
     labelIds?: string[];
   },
 ): Promise<Task> {

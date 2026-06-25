@@ -29,6 +29,13 @@ enum TaskStatus {
   DONE
 }
 
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 // A User can belong to multiple Organizations (multi-tenant membership),
 // each membership carrying its own Role.
 model User {
@@ -119,6 +126,7 @@ model Task {
   title       String
   description String?
   status      TaskStatus @default(TODO)
+  priority    Priority   @default(MEDIUM)
   position    Int
   dueDate     DateTime?
   createdAt   DateTime   @default(now())

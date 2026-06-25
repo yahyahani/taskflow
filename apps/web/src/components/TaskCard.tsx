@@ -12,6 +12,13 @@ const STATUS_DOT: Record<Task['status'], string> = {
   DONE: 'bg-mint',
 };
 
+const PRIORITY_BADGE: Record<Task['priority'], { label: string; className: string }> = {
+  LOW:    { label: 'Low',    className: 'text-muted' },
+  MEDIUM: { label: 'Med',   className: 'text-sky' },
+  HIGH:   { label: 'High',  className: 'text-amber' },
+  URGENT: { label: 'Urgent', className: 'text-coral font-semibold' },
+};
+
 const AVATAR_COLORS = ['bg-violet', 'bg-sky', 'bg-coral', 'bg-mint', 'bg-amber'];
 
 function avatarColor(name: string) {
@@ -117,16 +124,23 @@ export function TaskCard({
             <Highlight text={task.title} query={searchQuery} />
           </p>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(task.id);
-          }}
-          className="shrink-0 text-muted opacity-0 transition-opacity hover:text-coral group-hover:opacity-100"
-          aria-label="Delete task"
-        >
-          ×
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {task.priority !== 'MEDIUM' && (
+            <span className={clsx('text-[11px]', PRIORITY_BADGE[task.priority].className)}>
+              {PRIORITY_BADGE[task.priority].label}
+            </span>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(task.id);
+            }}
+            className="text-muted opacity-0 transition-opacity hover:text-coral group-hover:opacity-100"
+            aria-label="Delete task"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       {(task.assignee || due) && (
