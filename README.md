@@ -47,6 +47,10 @@ layered security in a monorepo setup.
 - **Full-text task search** — a debounced search bar in the board header queries task titles and
   descriptions via a dedicated API endpoint, scoped to the active organization. Matches are
   highlighted inline on the cards.
+- **Activity log** — every task creation, update, and move is recorded in an audit trail. An
+  "Activity" panel slides in from the board header and shows the last 50 events with actor avatar,
+  human-readable description (*"Sara moved Fix login bug → Done"*), and relative timestamp.
+  The feed refreshes automatically every 15 seconds.
 - **Task comments** — each task carries a live comment thread. Comments are posted and deleted
   instantly via optimistic React Query cache updates; only the author can delete their own comments.
 - **Member management** — invite any existing account to your organization by email address. Members
