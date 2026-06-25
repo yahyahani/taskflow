@@ -8,6 +8,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { ProjectsModule } from './projects/projects.module';
 import { TasksModule } from './tasks/tasks.module';
 import { LabelsModule } from './labels/labels.module';
+import { CommentsModule } from './comments/comments.module';
 import { WebsocketsModule } from './websockets/websockets.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { WebsocketsModule } from './websockets/websockets.module';
     ProjectsModule,
     TasksModule,
     LabelsModule,
+    CommentsModule,
     WebsocketsModule,
   ],
   providers: [

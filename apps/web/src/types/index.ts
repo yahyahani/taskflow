@@ -50,6 +50,17 @@ export interface Task {
   labels: Label[];
 }
 
+export interface Comment {
+  id: string;
+  body: string;
+  createdAt: string;
+  author: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
 export interface Project {
   id: string;
   name: string;
